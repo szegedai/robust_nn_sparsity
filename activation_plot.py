@@ -10,25 +10,32 @@ from activation_statistics import get_activation_statistics
 
 def main():
     epochs = 50
-    x_mnist = MNIST().get_all()
+    x_mnist = MNIST().get_all()[0]
 
     epoch_indices = np.arange(1, epochs + 1, 1)
     natural_activation_percentages = []
     robust_activation_percentages = []
+    hybrid_activation_percentages = []
     for i in epoch_indices:
-        natural_model = tf.keras.models.load_model(glob("natural_50_checkpoints/SampleCNN_{:03d}*.h5".format(i))[0])
+        """natural_model = tf.keras.models.load_model(glob("natural_50_checkpoints/SampleCNN_{:03d}*.h5".format(i))[0])
         robust_model = tf.keras.models.load_model(glob("robust_100_checkpoints/SampleCNN_{:03d}*.h5".format(i))[0])
 
         total, inactive = get_activation_statistics(check_max_activations(natural_model, x_mnist))
         natural_activation_percentages.append(inactive / total)
         total, inactive = get_activation_statistics(check_max_activations(robust_model, x_mnist))
-        robust_activation_percentages.append(inactive / total)
+        robust_activation_percentages.append(inactive / total)"""
+
+        hybrid_model = tf.keras.models.load_model(glob("hybrid_25_25_checkpoints2/SampleCNN_{:03d}*.h5".format(i))[0])
+
+        total, inactive = get_activation_statistics(check_max_activations(hybrid_model, x_mnist))
+        hybrid_activation_percentages.append(inactive / total)
 
         print(f"{i}/{epochs}", end="\r")
 
-    plt.plot(epoch_indices, natural_activation_percentages, label="natural", color="blue")
-    plt.plot(epoch_indices, robust_activation_percentages, label="robust", color="red")
-    plt.savefig("activation_comparisons.png")
+    """plt.plot(epoch_indices, natural_activation_percentages, label="natural", color="blue")
+    plt.plot(epoch_indices, robust_activation_percentages, label="robust", color="red")"""
+    plt.plot(epoch_indices, hybrid_activation_percentages, label="hybrid", color="red")
+    plt.savefig("hybrid_activation2.png")
     plt.show()
 
 

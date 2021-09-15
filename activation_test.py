@@ -32,7 +32,8 @@ def check_max_activations(model: tf.keras.Model, x_data_set, batch_size=5120):
     for layer in model.layers:
         if layer.count_params() > 0:
             extractors[layer.name] = tf.keras.Model(model.inputs, layer.output)
-            activations[layer.name] = np.zeros(layer.output.shape[1:], dtype=np.float)
+            #activations[layer.name] = np.zeros(layer.output.shape[1:], dtype=np.float)
+            activations[layer.name] = np.full(layer.output.shape[1:], float("-inf"), dtype=np.float)
             for b in batches:
                 batch_max_activations = np.max(extractors[layer.name].predict(b), axis=0)
                 activations[layer.name] = np.maximum(activations[layer.name], batch_max_activations)
