@@ -6,6 +6,11 @@ from attacks import LinfPGDAttack
 from training import *
 from activations import *
 from models import *
+from utils import MultiDataset
+
+
+def activation_dif_experiment():
+    pass
 
 
 def main():
@@ -17,14 +22,19 @@ def main():
 
     attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
 
-    tr_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
-    tr_loader = DataLoader(tr_dataset, batch_size=50, shuffle=True, num_workers=4)
+    train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=8)
+    test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
+    test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=8)
+
+    combined_dataset = MultiDataset(train_dataset, test_dataset)
+    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=8)
 
     relevant_layers = ['conv2d_0', 'conv2d_1', 'linear_0', 'linear_1']
-    activations = get_activations(model, relevant_layers, tr_loader)
+    activations = get_activations(model, relevant_layers, combined_loader)
     print(get_inactivity_ratio(activations))
-    train_adv(model, loss_fn, optimizer, tr_loader, attack, num_epochs=10, device=device)
-    activations = get_activations(model, relevant_layers, tr_loader)
+    train_adv(model, loss_fn, optimizer, train_loader, attack, num_epochs=10, device=device)
+    activations = get_activations(model, relevant_layers, combined_loader)
     print(get_inactivity_ratio(activations))
 
 
@@ -34,12 +44,12 @@ def main():
 
     attack = LinfPGDAttack(model, loss_fn, eps=2/255, step_size=8/255, steps=10, device=device)
 
-    tr_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
-    tr_loader = DataLoader(tr_dataset, batch_size=128, shuffle=True, num_workers=4)
+    train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=8)
 
-    #train_adv(model, loss_fn, optimizer, tr_loader, attack, num_epochs=20, device=device)
-    #train_dynamic_hybrid(model, loss_fn, optimizer, tr_loader, attack, loss_window=5, loss_deviation=0.05, num_epochs=100, device=device)
-    #train_static_hybrid(model, loss_fn, optimizer, tr_loader, attack, switch_point=35, num_epochs=50, device=device)'''
+    #train_adv(model, loss_fn, optimizer, train_loader, attack, num_epochs=20, device=device)
+    #train_dynamic_hybrid(model, loss_fn, optimizer, train_loader, attack, loss_window=5, loss_deviation=0.05, num_epochs=100, device=device)
+    #train_static_hybrid(model, loss_fn, optimizer, train_loader, attack, switch_point=35, num_epochs=50, device=device)'''
 
 
 if __name__ == '__main__':
