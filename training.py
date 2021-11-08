@@ -5,8 +5,8 @@ from collections import deque
 from utils import evaluate
 
 
-def train_adv(model, loss_fn, opt, train_loader,  attack, num_epochs=1, device=None):
-    device = device if device else torch.device('cpu')
+def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, num_epochs=1):
+    device = next(model.parameters()).device
     model.training = True
 
     for epoch_idx in range(num_epochs):
@@ -17,7 +17,7 @@ def train_adv(model, loss_fn, opt, train_loader,  attack, num_epochs=1, device=N
         for i, (x, y) in enumerate(train_loader):
             x, y = x.to(device), y.to(device)
 
-            x = attack(x, y, True)
+            x = attack(x, y)
             output = model(x)
 
             loss = loss_fn(output, y)
@@ -27,14 +27,17 @@ def train_adv(model, loss_fn, opt, train_loader,  attack, num_epochs=1, device=N
             opt.step()
 
             batch_losses.append(loss.item())
-            batch_accs.append(evaluate(torch.argmax(output, dim=1).detach().cpu().numpy(), y.detach().cpu().numpy()))
-            print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - loss: {np.mean(batch_losses):.4f}, adv_acc: {np.mean(batch_accs):.4f}', end='')
+            batch_accs.append(np.mean(torch.argmax(output, dim=1).detach().cpu().numpy() == y.detach().cpu().numpy()))
+            print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - adv_train_loss: {np.mean(batch_losses):.4f}, adv_train_acc: {np.mean(batch_accs):.4f}', end=' ')
+        if val_loader is not None:
+            val_loss, val_acc = evaluate(model, loss_fn, val_loader, attack)
+            print(f'val_loss: {val_loss:.4f}, val_acc: {val_acc:.4f}', end=' ')
         print()
     model.training = False
 
 
-def train_dynamic_hybrid(model, loss_fn, opt, train_loader, attack, loss_window, loss_deviation, num_epochs=1, device=None):
-    device = device if device else torch.device('cpu')
+def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, loss_window, loss_deviation, num_epochs=1):
+    device = next(model.parameters()).device
     model.training = True
 
     switched = False
@@ -53,7 +56,7 @@ def train_dynamic_hybrid(model, loss_fn, opt, train_loader, attack, loss_window,
             x, y = x.to(device), y.to(device)
 
             if switched:
-                x = attack(x, y, True)
+                x = attack(x, y)
             output = model(x)
 
             loss = loss_fn(output, y)
@@ -63,7 +66,7 @@ def train_dynamic_hybrid(model, loss_fn, opt, train_loader, attack, loss_window,
             opt.step()
 
             batch_losses.append(loss.item())
-            batch_accs.append(evaluate(torch.argmax(output, dim=1).detach().cpu().numpy(), y.detach().cpu().numpy()))
+            batch_accs.append(np.mean(torch.argmax(output, dim=1).detach().cpu().numpy() == y.detach().cpu().numpy()))
             reduced_batch_losses = np.mean(batch_losses)
             reduced_batch_accs = np.mean(batch_accs)
             print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - loss: {reduced_batch_losses:.4f}, acc: {reduced_batch_accs:.4f}', end='')
@@ -77,8 +80,8 @@ def train_dynamic_hybrid(model, loss_fn, opt, train_loader, attack, loss_window,
     model.training = False
 
 
-def train_static_hybrid(model, loss_fn, opt, train_loader, attack, switch_point, num_epochs=1, device=None):
-    device = device if device else torch.device('cpu')
+def train_static_hybrid(model, loss_fn, opt, attack, train_loader, switch_point, num_epochs=1):
+    device = next(model.parameters()).device
     model.training = True
 
     switched = False
@@ -96,7 +99,7 @@ def train_static_hybrid(model, loss_fn, opt, train_loader, attack, switch_point,
             x, y = x.to(device), y.to(device)
 
             if switched:
-                x = attack(x, y, True)
+                x = attack(x, y)
             output = model(x)
 
             loss = loss_fn(output, y)
@@ -106,7 +109,7 @@ def train_static_hybrid(model, loss_fn, opt, train_loader, attack, switch_point,
             opt.step()
 
             batch_losses.append(loss.item())
-            batch_accs.append(evaluate(torch.argmax(output, dim=1).detach().cpu().numpy(), y.detach().cpu().numpy()))
+            batch_accs.append(np.mean(torch.argmax(output, dim=1).detach().cpu().numpy() == y.detach().cpu().numpy()))
             reduced_batch_losses = np.mean(batch_losses)
             reduced_batch_accs = np.mean(batch_accs)
             print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - loss: {reduced_batch_losses:.4f}, acc: {reduced_batch_accs:.4f}', end='')

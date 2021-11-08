@@ -22,7 +22,7 @@ class LinfProjectedGradientDescendAttack:
 
         self.device = device if device else torch.device('cpu')
 
-    def __call__(self, original_images, labels, random_start=False):
+    def __call__(self, original_images, labels, random_start=True):
         model_original_mode = self.model.training
         self.model.training = False
         if random_start:

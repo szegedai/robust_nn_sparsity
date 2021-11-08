@@ -6,7 +6,7 @@ from attacks import LinfPGDAttack
 from training import *
 from activations import *
 from models import *
-from utils import MultiDataset
+from utils import MultiDataset, split_dataset
 
 
 def activation_dif_experiment():
@@ -15,6 +15,8 @@ def activation_dif_experiment():
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    val_split = 0.1
 
     model = VGG4((1, 28, 28), 10).to(device)
     loss_fn = nn.CrossEntropyLoss()
@@ -26,14 +28,16 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=8)
     test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
     test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=8)
+    train_dataset, val_dataset = split_dataset(train_dataset, val_split)
+    val_loader = DataLoader(val_dataset, batch_size=50, shuffle=False, num_workers=8)
 
-    combined_dataset = MultiDataset(train_dataset, test_dataset)
+    combined_dataset = MultiDataset(train_dataset, val_dataset, test_dataset)
     combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=8)
 
     relevant_layers = ['conv2d_0', 'conv2d_1', 'linear_0', 'linear_1']
     activations = get_activations(model, relevant_layers, combined_loader)
     print(get_inactivity_ratio(activations))
-    train_adv(model, loss_fn, optimizer, train_loader, attack, num_epochs=10, device=device)
+    train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, num_epochs=10)
     activations = get_activations(model, relevant_layers, combined_loader)
     print(get_inactivity_ratio(activations))
 
@@ -47,9 +51,9 @@ def main():
     train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=8)
 
-    #train_adv(model, loss_fn, optimizer, train_loader, attack, num_epochs=20, device=device)
-    #train_dynamic_hybrid(model, loss_fn, optimizer, train_loader, attack, loss_window=5, loss_deviation=0.05, num_epochs=100, device=device)
-    #train_static_hybrid(model, loss_fn, optimizer, train_loader, attack, switch_point=35, num_epochs=50, device=device)'''
+    #train_adv(model, loss_fn, optimizer, train_loader, attack, num_epochs=20)
+    #train_dynamic_hybrid(model, loss_fn, optimizer, attack, train_loader, loss_window=5, loss_deviation=0.05, num_epochs=100)
+    #train_static_hybrid(model, loss_fn, optimizer, attack, train_loader, switch_point=35, num_epochs=50)'''
 
 
 if __name__ == '__main__':
