@@ -41,8 +41,13 @@ def main():
     activations = get_activations(model, relevant_layers, combined_loader)
     print(get_inactivity_ratio(activations))'''
 
-    train_dynamic_hybrid(model, loss_fn, optimizer, attack, train_loader, val_loader, loss_window=5, loss_deviation=0.05,
-                         num_epochs=20)
+    train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
+    activations = get_activations(model, ['conv2d_0', 'conv2d_1', 'linear_0'], combined_loader)
+    print(get_inactivity_ratio(activations))
+    print(w0 := model.get_submodule('linear_0').weight)
+    reinitialize_inactive_neuron_weights(model, activations)
+    print(w1 := model.get_submodule('linear_0').weight)
+    print(torch.all(w0 == w1))
 
 
     '''model = torchvision.models.resnet18().to(device)
@@ -54,7 +59,7 @@ def main():
     train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=8)'''
 
-    #train_adv(model, loss_fn, optimizer, train_loader, attack, num_epochs=20)
+    #train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=20)
     #train_dynamic_hybrid(model, loss_fn, optimizer, attack, train_loader, loss_window=5, loss_deviation=0.05, num_epochs=50)
     #train_static_hybrid(model, loss_fn, optimizer, attack, train_loader, switch_point=35, num_epochs=50)
 

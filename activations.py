@@ -59,3 +59,25 @@ def get_inactivity_ratio(activations):
     for k, v in activations.items():
         ratios[k] = ((torch.numel(v) - torch.count_nonzero(v)) / torch.numel(v)).item()
     return ratios
+
+
+# WIP!
+def reinitialize_inactive_neuron_weights(model: nn.Module, activations: dict, layers=None, ration=1.0):
+    if layers is None:
+        layers = activations.keys()
+    device = next(model.parameters()).device
+    for k in layers:
+        layer = model.get_submodule(k)
+        activation = activations[k]
+        w_std_mean = torch.std_mean(layer.weight.detach())
+        b_std_mean = torch.std_mean(layer.bias.detach())
+        mask = torch.all((activation == 0).view(activation.shape[0], -1), dim=-1)
+        with torch.no_grad():
+            layer.weight.masked_scatter_(
+                torch.repeat_interleave(mask, torch.tensor(layer.weight.shape[1:], device=device).prod()).view(layer.weight.shape),
+                torch.normal(w_std_mean[1].item(), w_std_mean[0].item(), layer.weight.shape, device=device)
+            )
+            layer.bias.masked_scatter_(
+                mask,
+                torch.normal(b_std_mean[1].item(), b_std_mean[0].item(), layer.bias.shape, device=device)
+            )
