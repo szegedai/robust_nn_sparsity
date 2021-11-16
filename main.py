@@ -25,30 +25,25 @@ def main():
     attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
 
     train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
-    train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
     test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
-    test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=8)
+    test_loader = DataLoader(test_dataset, batch_size=100, shuffle=False, num_workers=6)
     train_dataset, val_dataset = split_dataset(train_dataset, val_split)
-    val_loader = DataLoader(val_dataset, batch_size=50, shuffle=False, num_workers=8)
+    val_loader = DataLoader(val_dataset, batch_size=100, shuffle=False, num_workers=6)
 
     combined_dataset = MultiDataset(train_dataset, val_dataset, test_dataset)
-    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=8)
+    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=6)
 
-    '''relevant_layers = ['conv2d_0', 'conv2d_1', 'linear_0', 'linear_1']
-    activations = get_activations(model, relevant_layers, combined_loader)
-    print(get_inactivity_ratio(activations))
-    train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, num_epochs=10)
-    activations = get_activations(model, relevant_layers, combined_loader)
-    print(get_inactivity_ratio(activations))'''
+    for sw in range(10, 41, 10):
+        model = VGG4((1, 28, 28), 10).to(device)
+        loss_fn = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(model.parameters(), 0.0001)
 
-    train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
+        train_static_hybrid(model, loss_fn, optimizer, attack, train_loader, switch_point=sw, num_epochs=50, checkpoint_dir=f'hybrid_sw{sw}')
+
+    '''train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
     activations = get_activations(model, ['conv2d_0', 'conv2d_1', 'linear_0'], combined_loader)
-    print(get_inactivity_ratio(activations))
-    print(w0 := model.get_submodule('linear_0').weight)
-    reinitialize_inactive_neuron_weights(model, activations)
-    print(w1 := model.get_submodule('linear_0').weight)
-    print(torch.all(w0 == w1))
-
+    print(get_inactivity_ratio(activations))'''
 
     '''model = torchvision.models.resnet18().to(device)
     loss_fn = nn.CrossEntropyLoss()
