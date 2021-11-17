@@ -83,14 +83,14 @@ def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=N
             print(f', adv_val_loss: {val_loss:.4f}, adv_val_acc: {val_acc:.4f}', end='')
             val_loss, val_acc = evaluate(model, loss_fn, val_loader)
             print(f', std_val_loss: {val_loss:.4f}, std_val_acc: {val_acc:.4f}', end='')
+        if checkpoint_dir is not None:
+            save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         if not switched and epoch_idx >= loss_window and np.std([np.mean(epoch_losses), reduced_batch_losses]) < loss_deviation:
             switched = True
             # Reinitialize optimizer inner state on switching.
             # In case of Adam, the momentums are reinitialized.
             opt.state = opt_init_state
         epoch_losses.appendleft(reduced_batch_losses)
-        if checkpoint_dir is not None:
-            save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         print()
     model.training = False
 
@@ -136,12 +136,12 @@ def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=No
             print(f', adv_val_loss: {val_loss:.4f}, adv_val_acc: {val_acc:.4f}', end='')
             val_loss, val_acc = evaluate(model, loss_fn, val_loader)
             print(f', std_val_loss: {val_loss:.4f}, std_val_acc: {val_acc:.4f}', end='')
+        if checkpoint_dir is not None:
+            save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         if not switched and epoch_idx >= (switch_point - 1):
             switched = True
             # Reinitialize optimizer inner state on switching.
             # In case of Adam, the momentums are reinitialized.
             opt.state = opt_init_state
-        if checkpoint_dir is not None:
-            save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         print()
     model.training = False
