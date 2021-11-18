@@ -6,13 +6,17 @@ from utils import evaluate
 from models import save_checkpoint
 
 
-def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, checkpoint_dir=None, num_epochs=1):
+def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None,
+              checkpoint_dir=None, metrics_lm=None, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
+    log_metrics = metrics_lm is not None
+    num_batches = len(train_loader)
 
     for epoch_idx in range(num_epochs):
         print(f'{epoch_idx + 1}/{num_epochs} epoch:')
         begin_time = time()
+        metrics = {}
         batch_losses = []
         batch_accs = []
         for i, (x, y) in enumerate(train_loader):
@@ -29,21 +33,32 @@ def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, checkp
 
             batch_losses.append(loss.item())
             batch_accs.append(np.mean(torch.argmax(output, dim=1).detach().cpu().numpy() == y.detach().cpu().numpy()))
-            print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - adv_train_loss: {np.mean(batch_losses):.4f}, adv_train_acc: {np.mean(batch_accs):.4f}', end='')
+            reduced_batch_losses = np.mean(batch_losses)
+            reduced_batch_accs = np.mean(batch_accs)
+            print(f'\r  {i + 1}/{num_batches} {time() - begin_time:.2f}s - adv_train_loss: {reduced_batch_losses:.4f}, adv_train_acc: {reduced_batch_accs:.4f}', end='')
+        metrics['adv_train_loss'] = reduced_batch_losses
+        metrics['adv_train_acc'] = reduced_batch_accs
         if val_loader is not None:
             val_loss, val_acc = evaluate(model, loss_fn, val_loader, attack)
             print(f', adv_val_loss: {val_loss:.4f}, adv_val_acc: {val_acc:.4f}', end='')
             val_loss, val_acc = evaluate(model, loss_fn, val_loader)
             print(f', std_val_loss: {val_loss:.4f}, std_val_acc: {val_acc:.4f}', end='')
+            metrics['adv_val_loss'] = val_loss
+            metrics['adv_val_acc'] = val_acc
+        if log_metrics:
+            metrics_lm.write_record(metrics)
         if checkpoint_dir is not None:
             save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         print()
     model.training = False
 
 
-def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=None, checkpoint_dir=None, loss_window=5, loss_deviation=0.05, num_epochs=1):
+def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=None,
+                         checkpoint_dir=None, metrics_lm=None, loss_window=5, loss_deviation=0.05, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
+    log_metrics = metrics_lm is not None
+    num_batches = len(train_loader)
 
     switched = False
     # For example, in case of Adam:
@@ -55,6 +70,7 @@ def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=N
     for epoch_idx in range(num_epochs):
         print(f'{epoch_idx + 1}/{num_epochs} epoch:')
         begin_time = time()
+        metrics = {}
         batch_losses = []
         batch_accs = []
         for i, (x, y) in enumerate(train_loader):
@@ -75,14 +91,26 @@ def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=N
             reduced_batch_losses = np.mean(batch_losses)
             reduced_batch_accs = np.mean(batch_accs)
             if switched:
-                print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - adv_train_loss: {reduced_batch_losses:.4f}, adv_train_acc: {reduced_batch_accs:.4f}', end='')
+                print(f'\r  {i + 1}/{num_batches} {time() - begin_time:.2f}s - adv_train_loss: {reduced_batch_losses:.4f}, adv_train_acc: {reduced_batch_accs:.4f}', end='')
             else:
-                print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - std_train_loss: {reduced_batch_losses:.4f}, std_train_acc: {reduced_batch_accs:.4f}', end='')
+                print(f'\r  {i + 1}/{num_batches} {time() - begin_time:.2f}s - std_train_loss: {reduced_batch_losses:.4f}, std_train_acc: {reduced_batch_accs:.4f}', end='')
+        if switched:
+            metrics['adv_train_loss'] = reduced_batch_losses
+            metrics['adv_train_acc'] = reduced_batch_accs
+        else:
+            metrics['std_train_loss'] = reduced_batch_losses
+            metrics['std_train_acc'] = reduced_batch_accs
         if val_loader is not None:
             val_loss, val_acc = evaluate(model, loss_fn, val_loader, attack)
             print(f', adv_val_loss: {val_loss:.4f}, adv_val_acc: {val_acc:.4f}', end='')
+            metrics['adv_val_loss'] = val_loss
+            metrics['adv_val_acc'] = val_acc
             val_loss, val_acc = evaluate(model, loss_fn, val_loader)
             print(f', std_val_loss: {val_loss:.4f}, std_val_acc: {val_acc:.4f}', end='')
+            metrics['std_val_loss'] = val_loss
+            metrics['std_val_acc'] = val_acc
+        if log_metrics:
+            metrics_lm.write_record(metrics)
         if checkpoint_dir is not None:
             save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         if not switched and epoch_idx >= loss_window and np.std([np.mean(epoch_losses), reduced_batch_losses]) < loss_deviation:
@@ -95,9 +123,12 @@ def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=N
     model.training = False
 
 
-def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=None, checkpoint_dir=None, switch_point=1, num_epochs=1):
+def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=None,
+                        checkpoint_dir=None, metrics_lm=None, switch_point=1, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
+    log_metrics = metrics_lm is not None
+    num_batches = len(train_loader)
 
     switched = False
     # For example, in case of Adam:
@@ -108,6 +139,7 @@ def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=No
     for epoch_idx in range(num_epochs):
         print(f'{epoch_idx + 1}/{num_epochs} epoch:')
         begin_time = time()
+        metrics = {}
         batch_losses = []
         batch_accs = []
         for i, (x, y) in enumerate(train_loader):
@@ -128,14 +160,26 @@ def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=No
             reduced_batch_losses = np.mean(batch_losses)
             reduced_batch_accs = np.mean(batch_accs)
             if switched:
-                print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - adv_train_loss: {reduced_batch_losses:.4f}, adv_train_acc: {reduced_batch_accs:.4f}', end='')
+                print(f'\r  {i + 1}/{num_batches} {time() - begin_time:.2f}s - adv_train_loss: {reduced_batch_losses:.4f}, adv_train_acc: {reduced_batch_accs:.4f}', end='')
             else:
-                print(f'\r  {i + 1} batch {time() - begin_time:.2f}s - std_train_loss: {reduced_batch_losses:.4f}, std_train_acc: {reduced_batch_accs:.4f}', end='')
+                print(f'\r  {i + 1}/{num_batches} {time() - begin_time:.2f}s - std_train_loss: {reduced_batch_losses:.4f}, std_train_acc: {reduced_batch_accs:.4f}', end='')
+        if switched:
+            metrics['adv_train_loss'] = reduced_batch_losses
+            metrics['adv_train_acc'] = reduced_batch_accs
+        else:
+            metrics['std_train_loss'] = reduced_batch_losses
+            metrics['std_train_acc'] = reduced_batch_accs
         if val_loader is not None:
             val_loss, val_acc = evaluate(model, loss_fn, val_loader, attack)
             print(f', adv_val_loss: {val_loss:.4f}, adv_val_acc: {val_acc:.4f}', end='')
+            metrics['adv_val_loss'] = val_loss
+            metrics['adv_val_acc'] = val_acc
             val_loss, val_acc = evaluate(model, loss_fn, val_loader)
             print(f', std_val_loss: {val_loss:.4f}, std_val_acc: {val_acc:.4f}', end='')
+            metrics['std_val_loss'] = val_loss
+            metrics['std_val_acc'] = val_acc
+        if log_metrics:
+            metrics_lm.write_record(metrics)
         if checkpoint_dir is not None:
             save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         if not switched and epoch_idx >= (switch_point - 1):

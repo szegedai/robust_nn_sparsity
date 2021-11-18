@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import json
 from intervaltree import IntervalTree
 
 
@@ -50,3 +51,19 @@ class MultiDataset(torch.utils.data.Dataset):
         for d in self.datasets:
             cumulative_length += len(d.data)
         return cumulative_length
+
+
+class MerticsLogManager:
+    def __init__(self, to_file=None, from_file=None):
+        self.file = to_file
+        self.records = []
+        if from_file is not None:
+            with open(from_file, 'r') as fp:
+                for record in fp.readlines():
+                    self.records.append(json.loads(record))
+
+    def write_record(self, record):
+        self.records.append(record)
+        if self.file is not None:
+            with open(self.file, 'a') as fp:
+                fp.write(json.dumps(self.records[-1]) + '\n')

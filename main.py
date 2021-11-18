@@ -6,7 +6,7 @@ from attacks import LinfPGDAttack
 from training import *
 from activations import *
 from models import *
-from utils import MultiDataset, split_dataset
+from utils import MultiDataset, split_dataset, MerticsLogManager
 
 
 def activation_dif_experiment():
@@ -40,7 +40,10 @@ def main():
         optimizer = torch.optim.Adam(model.parameters(), 0.0001)
         attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
 
-        train_static_hybrid(model, loss_fn, optimizer, attack, train_loader, val_loader, switch_point=sw, num_epochs=50, checkpoint_dir=f'hybrid/hybrid_sw{sw}')
+        train_static_hybrid(model, loss_fn, optimizer, attack, train_loader, val_loader,
+                            switch_point=sw, num_epochs=50,
+                            checkpoint_dir=f'hybrid/hybrid_sw{sw}',
+                            metrics_lm=MerticsLogManager(f'hybrid/hybrid_sw{sw}.log'))
 
     '''train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
     activations = get_activations(model, ['conv2d_0', 'conv2d_1', 'linear_0'], combined_loader)
