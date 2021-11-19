@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import json
+import os
 from intervaltree import IntervalTree
 
 
@@ -65,5 +66,6 @@ class MerticsLogManager:
     def write_record(self, record):
         self.records.append(record)
         if self.file is not None:
+            os.makedirs(os.path.dirname(self.file), exist_ok=True)
             with open(self.file, 'a') as fp:
                 fp.write(json.dumps(self.records[-1]) + '\n')
