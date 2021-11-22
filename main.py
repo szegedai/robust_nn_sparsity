@@ -34,7 +34,7 @@ def main():
     combined_dataset = MultiDataset(train_dataset, val_dataset, test_dataset)
     combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=6)
 
-    loss_fn = nn.CrossEntropyLoss()
+    '''loss_fn = nn.CrossEntropyLoss()
     for sw in range(10, 41, 10):
         model = VGG4((1, 28, 28), 10).to(device)
         optimizer = torch.optim.Adam(model.parameters(), 0.0001)
@@ -43,7 +43,19 @@ def main():
         train_static_hybrid(model, loss_fn, optimizer, attack, train_loader, val_loader,
                             switch_point=sw, num_epochs=50,
                             checkpoint_dir=f'hybrid/hybrid_sw{sw}',
-                            metrics_lm=MerticsLogManager(f'hybrid/hybrid_sw{sw}.log'))
+                            metrics_lm=MerticsLogManager(f'hybrid/hybrid_sw{sw}.log'))'''
+
+    model = VGG4((1, 28, 28), 10).to(device)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), 0.0001)
+    relevant_layers = ['conv2d_0', 'conv2d_1', 'linear_0']
+
+    load_checkpoint(model, optimizer, 'hybrid/mnist/vgg4/sw30/32')
+    activations = get_activations(model, relevant_layers, combined_loader)
+    reinitialize_inactive_neuron_weights(model, activations, relevant_layers)
+
+    attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
+    train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, num_epochs=18)
 
     '''train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
     activations = get_activations(model, ['conv2d_0', 'conv2d_1', 'linear_0'], combined_loader)

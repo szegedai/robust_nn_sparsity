@@ -17,6 +17,15 @@ def load_checkpoint(model, optimizer, path):
     optimizer.load_state_dict(checkpoint['optimizer_state'])
 
 
+def save_model(model, path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    torch.save({'model_state': model.state_dict()}, path)
+
+
+def load_model(model, path):
+    model.load_state_dict(torch.load(path)['model_state'])
+
+
 class VGG4(nn.Module):
     def __init__(self, input_shape, num_classes):
         super(VGG4, self).__init__()
