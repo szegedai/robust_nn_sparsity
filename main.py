@@ -45,30 +45,39 @@ def main():
                             checkpoint_dir=f'hybrid/hybrid_sw{sw}',
                             metrics_lm=MerticsLogManager(f'hybrid/hybrid_sw{sw}.log'))'''
 
-    model = VGG4((1, 28, 28), 10).to(device)
-    loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), 0.0001)
-    relevant_layers = ['conv2d_0', 'conv2d_1', 'linear_0']
+    for start in range(21, 41):
+        model = WideVGG4((1, 28, 28), 10).to(device)
+        loss_fn = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(model.parameters(), 0.0001)
+        relevant_layers = ['conv2d_0', 'conv2d_1', 'linear_0']
 
-    load_checkpoint(model, optimizer, 'hybrid/mnist/vgg4/sw30/32')
-    activations = get_activations(model, relevant_layers, combined_loader)
-    reinitialize_inactive_neuron_weights(model, activations, relevant_layers)
+        load_checkpoint(model, optimizer, f'hybrid/mnist/wide_vgg4/sw20/{start}')
+        activations = get_activations(model, relevant_layers, combined_loader)
+        reinitialize_inactive_neuron_weights(model, activations, relevant_layers)
 
-    attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
-    train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, num_epochs=18)
+        mlm = MerticsLogManager(f'hybrid/mnist/wide_vgg4/sw20_reinit_post{start}.log')
+        attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
+        train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, metrics_lm=mlm, num_epochs=28)
 
     '''train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
     activations = get_activations(model, ['conv2d_0', 'conv2d_1', 'linear_0'], combined_loader)
     print(get_inactivity_ratio(activations))'''
 
-    '''model = torchvision.models.resnet18().to(device)
+    '''model = ResNet18(10).to(device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=2e-4)
 
     attack = LinfPGDAttack(model, loss_fn, eps=2/255, step_size=8/255, steps=10, device=device)
 
     train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=8)'''
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=8)
+
+    #train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=10)
+    #save_model(model, './cifar10_resnet18_10epoch')
+    load_model(model, './cifar10_resnet18_10epoch')
+
+    activation = get_activations(model, ResNet18.get_relevant_layers(), train_loader)
+    print(get_inactivity_ratio(activation))'''
 
     #train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=20)
     #train_dynamic_hybrid(model, loss_fn, optimizer, attack, train_loader, loss_window=5, loss_deviation=0.05, num_epochs=50)

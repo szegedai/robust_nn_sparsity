@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torchvision
 import os
 
 
@@ -45,6 +46,10 @@ class VGG4(nn.Module):
         x = self.linear_1(x)
         return x
 
+    @staticmethod
+    def get_relevant_layers():
+        return ['conv2d_0', 'conv2d_1', 'linear_0']
+
 
 class WideVGG4(nn.Module):
     def __init__(self, input_shape, num_classes):
@@ -64,3 +69,48 @@ class WideVGG4(nn.Module):
         x = self.relu(self.linear_0(x))
         x = self.linear_1(x)
         return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['conv2d_0', 'conv2d_1', 'linear_0']
+
+
+class VGG19(nn.Module):
+    def __init__(self, num_classes):
+        super(VGG19, self).__init__()
+        self.body = torchvision.models.vgg19()
+        self.out_layer = nn.Linear(4096, num_classes)
+
+    def forward(self, x):
+        x = self.body(x)
+        x = self.out_layer(x)
+        return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['body.features.0', 'body.features.2', 'body.features.5', 'body.features.7',
+                'body.features.10', 'body.features.12', 'body.features.14', 'body.features.16',
+                'body.features.19', 'body.features.21', 'body.features.23', 'body.features.25',
+                'body.features.28', 'body.features.30', 'body.features.32', 'body.features.34',
+                'body.classifier.0', 'body.classifier.3', 'body.classifier.6']
+
+
+class ResNet18(nn.Module):
+    def __init__(self, num_classes):
+        super(ResNet18, self).__init__()
+        self.body = torchvision.models.resnet18()
+        self.out_layer = nn.Linear(1000, num_classes)
+
+    def forward(self, x):
+        x = self.body(x)
+        x = self.out_layer(x)
+        return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['body.conv1',
+                'body.layer1.0.conv1', 'body.layer1.0.conv2', 'body.layer1.1.conv1', 'body.layer1.1.conv2',
+                'body.layer2.0.conv1', 'body.layer2.0.conv2', 'body.layer2.1.conv1', 'body.layer2.1.conv2',
+                'body.layer3.0.conv1', 'body.layer3.0.conv2', 'body.layer3.1.conv1', 'body.layer3.1.conv2',
+                'body.layer4.0.conv1', 'body.layer4.0.conv2', 'body.layer4.1.conv1', 'body.layer4.1.conv2',
+                'body.fc']
