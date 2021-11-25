@@ -57,7 +57,7 @@ def main():
 
         mlm = MerticsLogManager(f'hybrid/mnist/wide_vgg4/sw20_reinit_post{start}.log')
         attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
-        train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, metrics_lm=mlm, num_epochs=28)
+        train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, metrics_lm=mlm, num_epochs=50 - start)
 
     '''train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
     activations = get_activations(model, ['conv2d_0', 'conv2d_1', 'linear_0'], combined_loader)
