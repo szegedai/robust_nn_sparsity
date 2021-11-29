@@ -41,10 +41,12 @@ def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None,
         if val_loader is not None:
             val_loss, val_acc = evaluate(model, loss_fn, val_loader, attack)
             print(f', adv_val_loss: {val_loss:.4f}, adv_val_acc: {val_acc:.4f}', end='')
-            val_loss, val_acc = evaluate(model, loss_fn, val_loader)
-            print(f', std_val_loss: {val_loss:.4f}, std_val_acc: {val_acc:.4f}', end='')
             metrics['adv_val_loss'] = val_loss
             metrics['adv_val_acc'] = val_acc
+            val_loss, val_acc = evaluate(model, loss_fn, val_loader)
+            print(f', std_val_loss: {val_loss:.4f}, std_val_acc: {val_acc:.4f}', end='')
+            metrics['std_val_loss'] = val_loss
+            metrics['std_val_acc'] = val_acc
         if log_metrics:
             metrics_lm.write_record(metrics)
         if checkpoint_dir is not None:
