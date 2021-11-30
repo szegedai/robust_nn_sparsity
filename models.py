@@ -79,7 +79,7 @@ class VGG19(nn.Module):
     def __init__(self, num_classes):
         super(VGG19, self).__init__()
         self.body = torchvision.models.vgg19()
-        self.out_layer = nn.Linear(4096, num_classes)
+        self.out_layer = nn.Linear(1000, num_classes)
 
     def forward(self, x):
         x = self.body(x)
@@ -92,6 +92,26 @@ class VGG19(nn.Module):
                 'body.features.10', 'body.features.12', 'body.features.14', 'body.features.16',
                 'body.features.19', 'body.features.21', 'body.features.23', 'body.features.25',
                 'body.features.28', 'body.features.30', 'body.features.32', 'body.features.34',
+                'body.classifier.0', 'body.classifier.3', 'body.classifier.6']
+
+
+class VGG19BN(nn.Module):
+    def __init__(self, num_classes):
+        super(VGG19BN, self).__init__()
+        self.body = torchvision.models.vgg19_bn()
+        self.out_layer = nn.Linear(1000, num_classes)
+
+    def forward(self, x):
+        x = self.body(x)
+        x = self.out_layer(x)
+        return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['body.features.1', 'body.features.4', 'body.features.8', 'body.features.11',
+                'body.features.15', 'body.features.18', 'body.features.21', 'body.features.24',
+                'body.features.28', 'body.features.31', 'body.features.34', 'body.features.37',
+                'body.features.41', 'body.features.44', 'body.features.47', 'body.features.50',
                 'body.classifier.0', 'body.classifier.3', 'body.classifier.6']
 
 

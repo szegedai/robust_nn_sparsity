@@ -20,7 +20,7 @@ def main():
 
     attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)'''
 
-    train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    '''train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
     train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
     test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
     test_loader = DataLoader(test_dataset, batch_size=100, shuffle=False, num_workers=6)
@@ -28,7 +28,18 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=100, shuffle=False, num_workers=6)
 
     combined_dataset = MultiDataset(train_dataset, val_dataset, test_dataset)
-    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=6)
+    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=6)'''
+
+
+    train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=6)
+    test_dataset = torchvision.datasets.CIFAR10('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
+    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=6)
+    train_dataset, val_dataset = split_dataset(train_dataset, val_split)
+    val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=6)
+
+    combined_dataset = MultiDataset(train_dataset, val_dataset, test_dataset)
+    combined_loader = DataLoader(combined_dataset, batch_size=128, shuffle=True, num_workers=6)
 
     '''loss_fn = nn.CrossEntropyLoss()
     for sw in range(10, 41, 10):
@@ -55,10 +66,6 @@ def main():
         attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
         train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, metrics_lm=mlm, num_epochs=50 - start)'''
 
-    '''train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
-    activations = get_activations(model, ['conv2d_0', 'conv2d_1', 'linear_0'], combined_loader)
-    print(get_inactivity_ratio(activations))'''
-
     '''model = ResNet18(10).to(device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=2e-4)
@@ -79,7 +86,7 @@ def main():
     #train_dynamic_hybrid(model, loss_fn, optimizer, attack, train_loader, loss_window=5, loss_deviation=0.05, num_epochs=50)
     #train_static_hybrid(model, loss_fn, optimizer, attack, train_loader, switch_point=10, num_epochs=12)
 
-    model = VGG4((1, 28, 28), 10).to(device)
+    '''model = VGG4((1, 28, 28), 10).to(device)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), 0.0001)
     relevant_layers = ['conv2d_0', 'conv2d_1', 'linear_0']
@@ -109,7 +116,25 @@ def main():
         for k, v in dif_activations.items():
             fp.write(k + ': ')
             fp.write(str(v.tolist()))
-            fp.write('\n')
+            fp.write('\n')'''
+
+    model = VGG19(10).to(device)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), 0.0001)
+    attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
+    train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=40)
+    activations = get_activations(model, VGG19.get_relevant_layers(), combined_loader)
+    with open('vgg19_activations.txt', 'w') as fp:
+        fp.write(str(get_inactivity_ratio(activations)))
+
+    model = VGG19BN(10).to(device)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), 0.0001)
+    attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
+    train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=40)
+    activations = get_activations(model, VGG19BN.get_relevant_layers(), combined_loader)
+    with open('vgg19bn_activations.txt', 'w') as fp:
+        fp.write(str(get_inactivity_ratio(activations)))
 
 
 if __name__ == '__main__':
