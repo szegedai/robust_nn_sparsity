@@ -35,19 +35,28 @@ class ActivationExtractor(nn.Module):
         return self.activations
 
 
-def get_activations(model: nn.Module, layers, dataloader):
+def get_activations(model: nn.Module, layers, dataloader, attack=None):
     with torch.no_grad():
         model_device = next(model.parameters()).device
         extractor = ActivationExtractor(model, layers)
         it = iter(dataloader)
 
         max_activations = {}
-        activations = extractor(next(it)[0].to(model_device))
+        batch = next(it)
+        batch[0], batch[1] = batch[0].to(model_device), batch[1].to(model_device)
+        if attack is not None:
+            activations = extractor(attack(*batch))
+        else:
+            activations = extractor(batch[0])
         for k, v in activations.items():
             max_activations[k] = torch.max(v, dim=0)[0]
 
         while (batch := next(it, None)) is not None:
-            activations = extractor(batch[0].to(model_device))
+            batch[0], batch[1] = batch[0].to(model_device), batch[1].to(model_device)
+            if attack is not None:
+                activations = extractor(attack(*batch))
+            else:
+                activations = extractor(batch[0])
             for k, v in activations.items():
                 max_activations[k] = torch.maximum(torch.max(v, dim=0)[0], max_activations[k])
         extractor.remove_hooks()

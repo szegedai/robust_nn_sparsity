@@ -9,10 +9,6 @@ from models import *
 from utils import MultiDataset, split_dataset, MerticsLogManager
 
 
-def activation_dif_experiment():
-    pass
-
-
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -45,7 +41,7 @@ def main():
                             checkpoint_dir=f'hybrid/hybrid_sw{sw}',
                             metrics_lm=MerticsLogManager(f'hybrid/hybrid_sw{sw}.log'))'''
 
-    for start in range(21, 41):
+    '''for start in range(21, 41):
         model = WideVGG4((1, 28, 28), 10).to(device)
         loss_fn = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(model.parameters(), 0.0001)
@@ -57,7 +53,7 @@ def main():
 
         mlm = MerticsLogManager(f'hybrid/mnist/wide_vgg4/sw20_reinit_post{start}.log')
         attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
-        train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, metrics_lm=mlm, num_epochs=50 - start)
+        train_adv(model, loss_fn, optimizer, attack, train_loader, val_loader, metrics_lm=mlm, num_epochs=50 - start)'''
 
     '''train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=5)
     activations = get_activations(model, ['conv2d_0', 'conv2d_1', 'linear_0'], combined_loader)
@@ -82,6 +78,38 @@ def main():
     #train_adv(model, loss_fn, optimizer, attack, train_loader, num_epochs=20)
     #train_dynamic_hybrid(model, loss_fn, optimizer, attack, train_loader, loss_window=5, loss_deviation=0.05, num_epochs=50)
     #train_static_hybrid(model, loss_fn, optimizer, attack, train_loader, switch_point=10, num_epochs=12)
+
+    model = VGG4((1, 28, 28), 10).to(device)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), 0.0001)
+    relevant_layers = ['conv2d_0', 'conv2d_1', 'linear_0']
+
+    #train_std(model, loss_fn, optimizer, train_loader, checkpoint_dir='tmp', num_epochs=10)
+    load_model(model, 'tmp/10')
+
+    attack = LinfPGDAttack(model, loss_fn, eps=0.3, step_size=0.01, steps=40, device=device)
+
+    std_activations = get_activations(model, relevant_layers, combined_loader)
+    with open('std_activations.txt', 'w') as fp:
+        for k, v in std_activations.items():
+            fp.write(k + ': ')
+            fp.write(str(v.tolist()))
+            fp.write('\n')
+    adv_activations = get_activations(model, relevant_layers, combined_loader, attack)
+    with open('adv_activations.txt', 'w') as fp:
+        for k, v in adv_activations.items():
+            fp.write(k + ': ')
+            fp.write(str(v.tolist()))
+            fp.write('\n')
+
+    dif_activations = {}
+    for key in std_activations.keys():
+        dif_activations[key] = (adv_activations[key] - std_activations[key]) / std_activations[key]
+    with open('dif_activations.txt', 'w') as fp:
+        for k, v in dif_activations.items():
+            fp.write(k + ': ')
+            fp.write(str(v.tolist()))
+            fp.write('\n')
 
 
 if __name__ == '__main__':
