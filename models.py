@@ -51,6 +51,36 @@ class VGG4(nn.Module):
         return ['conv2d_0', 'conv2d_1', 'linear_0']
 
 
+class VGG4BN(nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(VGG4BN, self).__init__()
+        self.max_pool = nn.MaxPool2d((2, 2))
+        self.relu = nn.ReLU(inplace=True)  # This is important for the neuron activation checks!
+
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
+        self.bn_0 = nn.BatchNorm2d(32)
+        self.conv2d_1 = nn.Conv2d(32, 64, (5, 5), padding='same')
+        self.bn_1 = nn.BatchNorm2d(64)
+        self.linear_0 = nn.Linear(64 * (input_shape[1] // (2 * 2) * input_shape[2] // (2 * 2)), 1024)
+        self.linear_1 = nn.Linear(1024, num_classes)
+
+    def forward(self, x):
+        x = self.conv2d_0(x)
+        x = self.bn_0(x)
+        x = self.max_pool(self.relu(x))
+        x = self.conv2d_1(x)
+        x = self.bn_1(x)
+        x = self.max_pool(self.relu(x))
+        x = torch.flatten(x, 1)
+        x = self.relu(self.linear_0(x))
+        x = self.linear_1(x)
+        return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['bn_0', 'bn_1', 'linear_0']
+
+
 class WideVGG4(nn.Module):
     def __init__(self, input_shape, num_classes):
         super(WideVGG4, self).__init__()
@@ -75,62 +105,63 @@ class WideVGG4(nn.Module):
         return ['conv2d_0', 'conv2d_1', 'linear_0']
 
 
-class VGG19(nn.Module):
-    def __init__(self, num_classes):
-        super(VGG19, self).__init__()
-        self.body = torchvision.models.vgg19()
-        self.out_layer = nn.Linear(1000, num_classes)
+class VGG19(torchvision.models.VGG):
+    def __init__(self, num_classes, **kwargs):
+        super(VGG19, self).__init__(
+            torchvision.models.vgg.make_layers(torchvision.models.vgg.cfgs['E'], batch_norm=False),
+            num_classes,
+            **kwargs
+        )
 
     def forward(self, x):
-        x = self.body(x)
-        x = self.out_layer(x)
-        return x
+        return super(VGG19, self).forward(x)
 
     @staticmethod
     def get_relevant_layers():
-        return ['body.features.0', 'body.features.2', 'body.features.5', 'body.features.7',
-                'body.features.10', 'body.features.12', 'body.features.14', 'body.features.16',
-                'body.features.19', 'body.features.21', 'body.features.23', 'body.features.25',
-                'body.features.28', 'body.features.30', 'body.features.32', 'body.features.34',
-                'body.classifier.0', 'body.classifier.3', 'body.classifier.6']
+        return ['features.0', 'features.2', 'features.5', 'features.7',
+                'features.10', 'features.12', 'features.14', 'features.16',
+                'features.19', 'features.21', 'features.23', 'features.25',
+                'features.28', 'features.30', 'features.32', 'features.34',
+                'classifier.0', 'classifier.3', 'classifier.6']
 
 
-class VGG19BN(nn.Module):
-    def __init__(self, num_classes):
-        super(VGG19BN, self).__init__()
-        self.body = torchvision.models.vgg19_bn()
-        self.out_layer = nn.Linear(1000, num_classes)
+class VGG19BN(torchvision.models.VGG):
+    def __init__(self, num_classes, **kwargs):
+        super(VGG19BN, self).__init__(
+            torchvision.models.vgg.make_layers(torchvision.models.vgg.cfgs['E'], batch_norm=True),
+            num_classes,
+            **kwargs
+        )
 
     def forward(self, x):
-        x = self.body(x)
-        x = self.out_layer(x)
-        return x
+        return super(VGG19BN, self).forward(x)
 
     @staticmethod
     def get_relevant_layers():
-        return ['body.features.1', 'body.features.4', 'body.features.8', 'body.features.11',
-                'body.features.15', 'body.features.18', 'body.features.21', 'body.features.24',
-                'body.features.28', 'body.features.31', 'body.features.34', 'body.features.37',
-                'body.features.41', 'body.features.44', 'body.features.47', 'body.features.50',
-                'body.classifier.0', 'body.classifier.3', 'body.classifier.6']
+        return ['features.1', 'features.4', 'features.8', 'features.11',
+                'features.15', 'features.18', 'features.21', 'features.24',
+                'features.28', 'features.31', 'features.34', 'features.37',
+                'features.41', 'features.44', 'features.47', 'features.50',
+                'classifier.0', 'classifier.3', 'classifier.6']
 
 
-class ResNet18(nn.Module):
-    def __init__(self, num_classes):
-        super(ResNet18, self).__init__()
-        self.body = torchvision.models.resnet18()
-        self.out_layer = nn.Linear(1000, num_classes)
+class ResNet18(torchvision.models.ResNet):
+    def __init__(self, num_classes, **kwargs):
+        super(ResNet18, self).__init__(
+            torchvision.models.resnet.BasicBlock,
+            [2, 2, 2, 2],
+            num_classes,
+            **kwargs
+        )
 
     def forward(self, x):
-        x = self.body(x)
-        x = self.out_layer(x)
-        return x
+        return super(ResNet18, self).forward(x)
 
     @staticmethod
     def get_relevant_layers():
-        return ['body.conv1',
-                'body.layer1.0.conv1', 'body.layer1.0.conv2', 'body.layer1.1.conv1', 'body.layer1.1.conv2',
-                'body.layer2.0.conv1', 'body.layer2.0.conv2', 'body.layer2.1.conv1', 'body.layer2.1.conv2',
-                'body.layer3.0.conv1', 'body.layer3.0.conv2', 'body.layer3.1.conv1', 'body.layer3.1.conv2',
-                'body.layer4.0.conv1', 'body.layer4.0.conv2', 'body.layer4.1.conv1', 'body.layer4.1.conv2',
+        return ['body.bn1',
+                'body.layer1.0.bn1', 'body.layer1.0.bn2', 'body.layer1.1.bn1', 'body.layer1.1.bn2',
+                'body.layer2.0.bn1', 'body.layer2.0.bn2', 'body.layer2.1.bn1', 'body.layer2.1.bn2',
+                'body.layer3.0.bn1', 'body.layer3.0.bn2', 'body.layer3.1.bn1', 'body.layer3.1.bn2',
+                'body.layer4.0.bn1', 'body.layer4.0.bn2', 'body.layer4.1.bn1', 'body.layer4.1.bn2',
                 'body.fc']
