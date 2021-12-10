@@ -1,2 +1,5 @@
 /legacy/
 /datasets/
+/results/
+/exp.py
+/vis.py

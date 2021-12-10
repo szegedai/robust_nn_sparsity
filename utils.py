@@ -54,7 +54,7 @@ class MultiDataset(torch.utils.data.Dataset):
         return cumulative_length
 
 
-class MerticsLogManager:
+class MetricsLogManager:
     def __init__(self, to_file=None, from_file=None):
         self.file = to_file
         self.records = []
