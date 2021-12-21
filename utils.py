@@ -69,3 +69,54 @@ class MetricsLogManager:
             os.makedirs(os.path.dirname(self.file), exist_ok=True)
             with open(self.file, 'a') as fp:
                 fp.write(json.dumps(self.records[-1]) + '\n')
+
+    def get_transposed(self):
+        assert len(self.records) > 0, 'There must be at least one record in order to transpose!'
+
+        transposed_metrics = {}
+        for key in self.records[0].keys():
+            transposed_metrics[key] = []
+
+        for rec in self.records:
+            assert rec.keys() == transposed_metrics.keys(), 'All record keys must be the same in order to transpose!'
+
+        for rec in self.records:
+            for k, v in rec.items():
+                transposed_metrics[k].append(v)
+        return transposed_metrics
+
+
+class Regularization:
+    def __init__(self, model_parameters=None, lam=0.0):
+        self.model_parameters = model_parameters
+        self.lam = lam
+
+    def norm(self):
+        return 0.0
+
+    def __call__(self):
+        return self.norm() * self.lam
+
+
+class L2Regularization(Regularization):
+    def __init__(self, model_parameters, l2_lambda):
+        super(L2Regularization, self).__init__(model_parameters, l2_lambda)
+
+    def norm(self):
+        return sum(p.pow(2.0).sum() for p in self.model_parameters)
+
+
+class L1Regularization(Regularization):
+    def __init__(self, model_parameters, l1_lambda):
+        super(L1Regularization, self).__init__(model_parameters, l1_lambda)
+
+    def norm(self):
+        return sum(p.abs().sum() for p in self.model_parameters)
+
+
+class LbRegularization(Regularization):
+    def __init__(self, model_parameters, lb_lambda):
+        super(LbRegularization, self).__init__(model_parameters, lb_lambda)
+
+    def norm(self):
+        return sum(((p + p.abs()) / 2).pow(2.0).sum() for p in self.model_parameters)

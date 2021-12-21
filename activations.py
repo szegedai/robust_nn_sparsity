@@ -63,11 +63,20 @@ def get_activations(model: nn.Module, layers, dataloader, attack=None):
     return max_activations
 
 
-def get_inactivity_ratio(activations):
+def get_inactivity_ratios(activations):
     ratios = {}
     for k, v in activations.items():
         ratios[k] = ((torch.numel(v) - torch.count_nonzero(v)) / torch.numel(v)).item()
     return ratios
+
+
+def get_inactivity_ratio(activations):
+    num_activations = 0.0
+    num_inactives = 0.0
+    for k, v in activations.items():
+        num_activations += torch.numel(v)
+        num_inactives += (torch.numel(v) - torch.count_nonzero(v)).item()
+    return num_inactives / num_activations
 
 
 # WIP!

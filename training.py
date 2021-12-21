@@ -2,11 +2,12 @@ import torch
 import numpy as np
 from time import time
 from collections import deque
-from utils import evaluate
+from utils import evaluate, Regularization
 from models import save_checkpoint
 
 
-def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=None, checkpoint_dir=None, metrics_lm=None, num_epochs=1):
+def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=None,
+              reg=Regularization(), checkpoint_dir=None, metrics_lm=None, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
     log_metrics = metrics_lm is not None
@@ -26,7 +27,7 @@ def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=Non
 
             output = model(x)
 
-            loss = loss_fn(output, y)
+            loss = loss_fn(output, y) + reg()
 
             opt.zero_grad()
             loss.backward()
@@ -58,7 +59,7 @@ def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=Non
 
 
 def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, val_attack=None,
-              checkpoint_dir=None, metrics_lm=None, num_epochs=1):
+              reg=Regularization(), checkpoint_dir=None, metrics_lm=None, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
     do_validation = val_loader is not None
@@ -80,7 +81,7 @@ def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, val_at
             x = attack(x, y)
             output = model(x)
 
-            loss = loss_fn(output, y)
+            loss = loss_fn(output, y) + reg()
 
             opt.zero_grad()
             loss.backward()
@@ -111,7 +112,8 @@ def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, val_at
 
 
 def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=None, val_attack=None,
-                         checkpoint_dir=None, metrics_lm=None, loss_window=5, loss_deviation=0.05, num_epochs=1):
+                         reg=Regularization(), checkpoint_dir=None, metrics_lm=None,
+                         loss_window=5, loss_deviation=0.05, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
     log_metrics = metrics_lm is not None
@@ -141,7 +143,7 @@ def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=N
                 x = attack(x, y)
             output = model(x)
 
-            loss = loss_fn(output, y)
+            loss = loss_fn(output, y) + reg()
 
             opt.zero_grad()
             loss.backward()
@@ -185,7 +187,8 @@ def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=N
 
 
 def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=None, val_attack=None,
-                        checkpoint_dir=None, metrics_lm=None, switch_point=1, num_epochs=1):
+                        reg=Regularization(), checkpoint_dir=None, metrics_lm=None,
+                        switch_point=1, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
     log_metrics = metrics_lm is not None
@@ -214,7 +217,7 @@ def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=No
                 x = attack(x, y)
             output = model(x)
 
-            loss = loss_fn(output, y)
+            loss = loss_fn(output, y) + reg()
 
             opt.zero_grad()
             loss.backward()

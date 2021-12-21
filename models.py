@@ -106,12 +106,15 @@ class WideVGG4(nn.Module):
 
 
 class VGG19(torchvision.models.VGG):
-    def __init__(self, num_classes, **kwargs):
+    def __init__(self, num_classes, use_dropout=False, **kwargs):
         super(VGG19, self).__init__(
             torchvision.models.vgg.make_layers(torchvision.models.vgg.cfgs['E'], batch_norm=False),
             num_classes,
             **kwargs
         )
+        if not use_dropout:
+            self.classifier[2] = nn.Identity()
+            self.classifier[5] = nn.Identity()
 
     def forward(self, x):
         return super(VGG19, self).forward(x)
@@ -126,12 +129,15 @@ class VGG19(torchvision.models.VGG):
 
 
 class VGG19BN(torchvision.models.VGG):
-    def __init__(self, num_classes, **kwargs):
+    def __init__(self, num_classes, use_dropout=False, **kwargs):
         super(VGG19BN, self).__init__(
             torchvision.models.vgg.make_layers(torchvision.models.vgg.cfgs['E'], batch_norm=True),
             num_classes,
             **kwargs
         )
+        if not use_dropout:
+            self.classifier[2] = nn.Identity()
+            self.classifier[5] = nn.Identity()
 
     def forward(self, x):
         return super(VGG19BN, self).forward(x)
