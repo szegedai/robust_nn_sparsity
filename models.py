@@ -27,6 +27,47 @@ def load_model(model, path):
     model.load_state_dict(torch.load(path)['model_state'])
 
 
+class VGG2(nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(VGG2, self).__init__()
+        self.max_pool = nn.MaxPool2d((2, 2))
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 8, (5, 5), padding='same')
+        self.linear_0 = nn.Linear(8 * (input_shape[1] // 2 * input_shape[2] // 2), num_classes)
+
+    def forward(self, x):
+        x = self.max_pool(self.relu(self.conv2d_0(x)))
+        x = torch.flatten(x, 1)
+        x = self.linear_0(x)
+        return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['conv2d_0']
+
+
+class VGG2BN(nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(VGG2BN, self).__init__()
+        self.max_pool = nn.MaxPool2d((2, 2))
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 8, (5, 5), padding='same')
+        self.bn_0 = nn.BatchNorm2d(8)
+        self.linear_0 = nn.Linear(8 * (input_shape[1] // 2 * input_shape[2] // 2), num_classes)
+
+    def forward(self, x):
+        x = self.max_pool(self.relu(self.bn_0(self.conv2d_0(x))))
+        x = torch.flatten(x, 1)
+        x = self.linear_0(x)
+        return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['bn_0']
+
+
 class VGG4(nn.Module):
     def __init__(self, input_shape, num_classes):
         super(VGG4, self).__init__()

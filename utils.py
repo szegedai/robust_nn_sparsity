@@ -87,8 +87,8 @@ class MetricsLogManager:
 
 
 class Regularization:
-    def __init__(self, model_parameters=None, lam=0.0):
-        self.model_parameters = model_parameters
+    def __init__(self, model=None, lam=0.0):
+        self.model = model
         self.lam = lam
 
     def norm(self):
@@ -99,19 +99,19 @@ class Regularization:
 
 
 class L2Regularization(Regularization):
-    def __init__(self, model_parameters, l2_lambda):
-        super(L2Regularization, self).__init__(model_parameters, l2_lambda)
+    def __init__(self, model, l2_lambda):
+        super(L2Regularization, self).__init__(model, l2_lambda)
 
     def norm(self):
-        return sum(p.pow(2.0).sum() for p in self.model_parameters)
+        return sum(p.pow(2.0).sum() for p in self.model.parameters())
 
 
 class L1Regularization(Regularization):
-    def __init__(self, model_parameters, l1_lambda):
-        super(L1Regularization, self).__init__(model_parameters, l1_lambda)
+    def __init__(self, model, l1_lambda):
+        super(L1Regularization, self).__init__(model, l1_lambda)
 
     def norm(self):
-        return sum(p.abs().sum() for p in self.model_parameters)
+        return sum(p.abs().sum() for p in self.model.parameters())
 
 
 class LbRegularization(Regularization):
@@ -119,4 +119,4 @@ class LbRegularization(Regularization):
         super(LbRegularization, self).__init__(model_parameters, lb_lambda)
 
     def norm(self):
-        return sum(((p + p.abs()) / 2).pow(2.0).sum() for p in self.model_parameters)
+        return sum(((p + p.abs()) / 2).pow(2.0).sum() for p in self.model.parameters())
