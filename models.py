@@ -33,8 +33,8 @@ class VGG2(nn.Module):
         self.max_pool = nn.MaxPool2d((2, 2))
         self.relu = nn.ReLU(inplace=True)
 
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 8, (5, 5), padding='same')
-        self.linear_0 = nn.Linear(8 * (input_shape[1] // 2 * input_shape[2] // 2), num_classes)
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
+        self.linear_0 = nn.Linear(32 * (input_shape[1] // 2 * input_shape[2] // 2), num_classes)
 
     def forward(self, x):
         x = self.max_pool(self.relu(self.conv2d_0(x)))
@@ -53,9 +53,9 @@ class VGG2BN(nn.Module):
         self.max_pool = nn.MaxPool2d((2, 2))
         self.relu = nn.ReLU(inplace=True)
 
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 8, (5, 5), padding='same')
-        self.bn_0 = nn.BatchNorm2d(8)
-        self.linear_0 = nn.Linear(8 * (input_shape[1] // 2 * input_shape[2] // 2), num_classes)
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
+        self.bn_0 = nn.BatchNorm2d(32)
+        self.linear_0 = nn.Linear(32 * (input_shape[1] // 2 * input_shape[2] // 2), num_classes)
 
     def forward(self, x):
         x = self.max_pool(self.relu(self.bn_0(self.conv2d_0(x))))

@@ -1,8 +1,13 @@
 import torch
+import torchvision
 import numpy as np
 import json
 import os
+import gc
+from torch.utils.data import DataLoader
 from intervaltree import IntervalTree
+from models import load_model
+from activations import get_activations, get_inactivity_ratio
 
 
 def split_dataset(dataset, split=0.1, seed=42):
@@ -54,7 +59,7 @@ class MultiDataset(torch.utils.data.Dataset):
         return cumulative_length
 
 
-class MetricsLogManager:
+class LogManager:
     def __init__(self, to_file=None, from_file=None):
         self.file = to_file
         self.records = []
@@ -62,6 +67,8 @@ class MetricsLogManager:
             with open(from_file, 'r') as fp:
                 for record in fp.readlines():
                     self.records.append(json.loads(record))
+            if self.file is None:
+                self.file = from_file
 
     def write_record(self, record):
         self.records.append(record)
@@ -69,6 +76,13 @@ class MetricsLogManager:
             os.makedirs(os.path.dirname(self.file), exist_ok=True)
             with open(self.file, 'a') as fp:
                 fp.write(json.dumps(self.records[-1]) + '\n')
+
+    def write_all(self):
+        assert self.file is not None, 'A file must be provided in order to write!'
+        os.makedirs(os.path.dirname(self.file), exist_ok=True)
+        with open(self.file, 'w') as fp:
+            for r in self.records:
+                fp.write(json.dumps(r) + '\n')
 
     def get_transposed(self):
         assert len(self.records) > 0, 'There must be at least one record in order to transpose!'
@@ -84,6 +98,61 @@ class MetricsLogManager:
             for k, v in rec.items():
                 transposed_metrics[k].append(v)
         return transposed_metrics
+
+    def has_col(self, col_name):
+        ret = True
+        for rec in self.records:
+            ret &= col_name in rec
+        return ret
+
+
+def append_activations_to_log(log_file, checkpoint_dir, model, ds_loader, attack=None, epoch_interval=None, sampling=1, force=False):
+    # epoch_interval tuple inclusion: [first, last)
+    lm = LogManager(from_file=log_file)
+
+    check_std_activations = force or not lm.has_col('std_inactivity_ratio')
+    check_adv_activations = (force or not lm.has_col('adv_inactivity_ratio')) and attack is not None
+    if not check_std_activations and not check_adv_activations:
+        return
+
+    if epoch_interval is None:
+        epoch_interval = (1, len(lm.records) + 1)
+
+    std_inactivity_ratio = np.array([])
+    adv_inactivity_ratio = np.array([])
+    for i in range(*epoch_interval):
+        if i % sampling == 0:
+            load_model(model, f'{checkpoint_dir}/{i}')
+            if check_std_activations:
+                #lm.records[i - 1]['std_inactivity_ratio'] = get_inactivity_ratio(get_activations(model, model.get_relevant_layers(), ds_loader))
+                std_inactivity_ratio = np.append(std_inactivity_ratio, get_inactivity_ratio(get_activations(model, model.get_relevant_layers(), ds_loader)))
+            if check_adv_activations:
+                #lm.records[i - 1]['adv_inactivity_ratio'] = get_inactivity_ratio(get_activations(model, model.get_relevant_layers(), ds_loader, attack))
+                adv_inactivity_ratio = np.append(adv_inactivity_ratio, get_inactivity_ratio(get_activations(model, model.get_relevant_layers(), ds_loader, attack)))
+        else:
+            if check_std_activations:
+                std_inactivity_ratio = np.append(std_inactivity_ratio, np.nan)
+            if check_adv_activations:
+                adv_inactivity_ratio = np.append(adv_inactivity_ratio, np.nan)
+
+    if check_std_activations:
+        xp = (~np.isnan(std_inactivity_ratio)).ravel().nonzero()[0]
+        fp = std_inactivity_ratio[~np.isnan(std_inactivity_ratio)]
+        x = np.isnan(std_inactivity_ratio).ravel().nonzero()[0]
+        std_inactivity_ratio[np.isnan(std_inactivity_ratio)] = np.interp(x, xp, fp)
+    if check_adv_activations:
+        xp = (~np.isnan(adv_inactivity_ratio)).ravel().nonzero()[0]
+        fp = adv_inactivity_ratio[~np.isnan(adv_inactivity_ratio)]
+        x = np.isnan(adv_inactivity_ratio).ravel().nonzero()[0]
+        adv_inactivity_ratio[np.isnan(adv_inactivity_ratio)] = np.interp(x, xp, fp)
+
+    for i in range(*epoch_interval):
+        if check_std_activations:
+            lm.records[i - 1]['std_inactivity_ratio'] = std_inactivity_ratio[i - epoch_interval[0]]
+        if check_adv_activations:
+            lm.records[i - 1]['adv_inactivity_ratio'] = adv_inactivity_ratio[i - epoch_interval[0]]
+
+    lm.write_all()
 
 
 class Regularization:
@@ -120,3 +189,41 @@ class LbRegularization(Regularization):
 
     def norm(self):
         return sum(((p + p.abs()) / 2).pow(2.0).sum() for p in self.model.parameters())
+
+
+def load_mnist():
+    combined = []
+    train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
+    combined.append(train_dataset)
+    test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
+    test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=6)
+    combined.append(test_dataset)
+
+    # train_dataset, val_dataset = split_dataset(train_dataset, val_split)
+    # val_loader = DataLoader(val_dataset, batch_size=50, shuffle=False, num_workers=6)
+    # combined.append(val_dataset)
+
+    combined_dataset = MultiDataset(*combined)
+    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=6)
+
+    return train_loader, test_loader, combined_loader
+
+
+def load_cifar10():
+    combined = []
+    train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=6)
+    combined.append(train_dataset)
+    test_dataset = torchvision.datasets.CIFAR10('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
+    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=6)
+    combined.append(test_dataset)
+
+    #train_dataset, val_dataset = split_dataset(train_dataset, val_split)
+    #val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=6)
+    #combined.append(val_dataset)
+
+    combined_dataset = MultiDataset(*combined)
+    combined_loader = DataLoader(combined_dataset, batch_size=128, shuffle=True, num_workers=6)
+
+    return train_loader, test_loader, combined_loader

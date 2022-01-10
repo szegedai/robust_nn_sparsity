@@ -7,10 +7,10 @@ from models import save_checkpoint
 
 
 def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=None,
-              reg=Regularization(), checkpoint_dir=None, metrics_lm=None, num_epochs=1):
+              reg=Regularization(), checkpoint_dir=None, log_manager=None, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
-    log_metrics = metrics_lm is not None
+    log_metrics = log_manager is not None
     do_validation = val_loader is not None
     make_checkpoints = checkpoint_dir is not None
     do_adv_validation = val_attack is not None
@@ -51,7 +51,7 @@ def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=Non
             metrics['std_val_loss'] = val_loss
             metrics['std_val_acc'] = val_acc
         if log_metrics:
-            metrics_lm.write_record(metrics)
+            log_manager.write_record(metrics)
         if make_checkpoints:
             save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         print()
@@ -59,11 +59,11 @@ def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=Non
 
 
 def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, val_attack=None,
-              reg=Regularization(), checkpoint_dir=None, metrics_lm=None, num_epochs=1):
+              reg=Regularization(), checkpoint_dir=None, log_manager=None, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
     do_validation = val_loader is not None
-    log_metrics = metrics_lm is not None
+    log_metrics = log_manager is not None
     make_checkpoints = checkpoint_dir is not None
     if val_attack is None:
         val_attack = attack
@@ -104,7 +104,7 @@ def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, val_at
             metrics['std_val_loss'] = val_loss
             metrics['std_val_acc'] = val_acc
         if log_metrics:
-            metrics_lm.write_record(metrics)
+            log_manager.write_record(metrics)
         if make_checkpoints:
             save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         print()
@@ -112,11 +112,11 @@ def train_adv(model, loss_fn, opt, attack, train_loader, val_loader=None, val_at
 
 
 def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=None, val_attack=None,
-                         reg=Regularization(), checkpoint_dir=None, metrics_lm=None,
+                         reg=Regularization(), checkpoint_dir=None, log_manager=None,
                          loss_window=5, loss_deviation=0.05, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
-    log_metrics = metrics_lm is not None
+    log_metrics = log_manager is not None
     do_validation = val_loader is not None
     make_checkpoints = checkpoint_dir is not None
     if val_attack is None:
@@ -173,7 +173,7 @@ def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=N
             metrics['std_val_loss'] = val_loss
             metrics['std_val_acc'] = val_acc
         if log_metrics:
-            metrics_lm.write_record(metrics)
+            log_manager.write_record(metrics)
         if make_checkpoints:
             save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         if not switched and epoch_idx >= loss_window and np.std([np.mean(epoch_losses), reduced_batch_losses]) < loss_deviation:
@@ -187,11 +187,11 @@ def train_dynamic_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=N
 
 
 def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=None, val_attack=None,
-                        reg=Regularization(), checkpoint_dir=None, metrics_lm=None,
+                        reg=Regularization(), checkpoint_dir=None, log_manager=None,
                         switch_point=1, num_epochs=1):
     device = next(model.parameters()).device
     model.training = True
-    log_metrics = metrics_lm is not None
+    log_metrics = log_manager is not None
     do_validation = val_loader is not None
     make_checkpoints = checkpoint_dir is not None
     if val_attack is None:
@@ -247,7 +247,7 @@ def train_static_hybrid(model, loss_fn, opt, attack, train_loader, val_loader=No
             metrics['std_val_loss'] = val_loss
             metrics['std_val_acc'] = val_acc
         if log_metrics:
-            metrics_lm.write_record(metrics)
+            log_manager.write_record(metrics)
         if make_checkpoints:
             save_checkpoint(model, opt, f'{checkpoint_dir}/{epoch_idx + 1}')
         if not switched and epoch_idx >= (switch_point - 1):
