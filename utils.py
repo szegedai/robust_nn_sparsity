@@ -3,7 +3,6 @@ import torchvision
 import numpy as np
 import json
 import os
-import gc
 from torch.utils.data import DataLoader
 from intervaltree import IntervalTree
 from models import load_model
@@ -153,6 +152,13 @@ def append_activations_to_log(log_file, checkpoint_dir, model, ds_loader, attack
             lm.records[i - 1]['adv_inactivity_ratio'] = adv_inactivity_ratio[i - epoch_interval[0]]
 
     lm.write_all()
+
+
+def simplify_tdict(td):  # td = tensor dict
+    ret = torch.tensor([])
+    for v in td.values():
+        ret = torch.cat((ret, torch.flatten(v)), dim=0)
+    return ret
 
 
 class Regularization:

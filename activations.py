@@ -2,6 +2,14 @@ import torch
 import torch.nn as nn
 
 
+'''def split_dict(d: dict):
+    return d.keys(), torch.stack(list(d.values()))
+
+
+def create_dict(k, v: torch.Tensor):
+    return dict(zip(k, torch.unbind(v)))'''
+
+
 class ActivationExtractor(nn.Module):
     def __init__(self, model: nn.Module, layers=None):
         super().__init__()
@@ -63,14 +71,62 @@ def get_activations(model: nn.Module, layers, dataloader, attack=None):
     return max_activations
 
 
-def get_inactivity_ratios(activations):
+def get_activation_counts(model, layers, dataloader, attack=None):
+    with torch.no_grad():
+        model_device = next(model.parameters()).device
+        extractor = ActivationExtractor(model, layers)
+        it = iter(dataloader)
+
+        num_samples = 0
+        activation_counts = {}
+        batch = next(it)
+        batch[0], batch[1] = batch[0].to(model_device), batch[1].to(model_device)
+        num_samples += len(batch[0])
+        if attack is not None:
+            activations = extractor(attack(*batch))
+        else:
+            activations = extractor(batch[0])
+        for k, v in activations.items():
+            activation_counts[k] = torch.sum(torch.sign(v), dim=0)
+
+        while (batch := next(it, None)) is not None:
+            batch[0], batch[1] = batch[0].to(model_device), batch[1].to(model_device)
+            num_samples += len(batch[0])
+            if attack is not None:
+                activations = extractor(attack(*batch))
+            else:
+                activations = extractor(batch[0])
+            for k, v in activations.items():
+                activation_counts[k] += torch.sum(torch.sign(v), dim=0)
+        extractor.remove_hooks()
+    return activation_counts, num_samples
+
+
+def get_activity(model, layers, dataloader, attack=None):
+    activation_counts, num_samples = get_activation_counts(model, layers, dataloader, attack)
+    with torch.no_grad():
+        for k, v in activation_counts.items():
+            activation_counts[k] /= num_samples  # turn count into ratios
+    return activation_counts
+
+
+def get_inactivity(model, layers, dataloader, attack=None):
+    activation_counts, num_samples = get_activation_counts(model, layers, dataloader, attack)
+    with torch.no_grad():
+        for k, v in activation_counts.items():
+            activation_counts[k] /= num_samples  # turn count into ratios
+            activation_counts[k] = 1 - activation_counts[k]
+    return activation_counts
+
+
+def get_inactivity_ratios(activations):  # works with activation dicts and activity dicts too
     ratios = {}
     for k, v in activations.items():
         ratios[k] = ((torch.numel(v) - torch.count_nonzero(v)) / torch.numel(v)).item()
     return ratios
 
 
-def get_inactivity_ratio(activations):
+def get_inactivity_ratio(activations):  # works with activation dicts and activity dicts too
     num_activations = 0.0
     num_inactives = 0.0
     for k, v in activations.items():
