@@ -225,11 +225,22 @@ def load_cifar10():
     test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 
-    #train_dataset, val_dataset = split_dataset(train_dataset, val_split)
-    #val_loader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=6)
-    #combined.append(val_dataset)
-
     combined_dataset = MultiDataset(*combined)
     combined_loader = DataLoader(combined_dataset, batch_size=128, shuffle=True, num_workers=6)
+
+    return train_loader, test_loader, combined_loader
+
+
+def load_fashion_mnist():
+    combined = []
+    train_dataset = torchvision.datasets.FashionMNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
+    combined.append(train_dataset)
+    test_dataset = torchvision.datasets.FashionMNIST('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
+    test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=6)
+    combined.append(test_dataset)
+
+    combined_dataset = MultiDataset(*combined)
+    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=6)
 
     return train_loader, test_loader, combined_loader
