@@ -6,7 +6,16 @@ import os
 from torch.utils.data import DataLoader
 from intervaltree import IntervalTree
 from models import load_model
-from activations import get_activations, get_inactivity_ratio
+from activations import get_activations, get_inactivity_ratio, get_activity
+
+
+def save_data(data, path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    torch.save(data, path)
+
+
+def load_data(path):
+    return torch.load(path)
 
 
 def split_dataset(dataset, split=0.1, seed=42):
@@ -154,11 +163,27 @@ def append_activations_to_log(log_file, checkpoint_dir, model, ds_loader, attack
     lm.write_all()
 
 
-def simplify_tdict(td):  # td = tensor dict
-    ret = torch.tensor([])
+def simplify_tdict(td, device=None):  # td = tensor dict
+    if device is None:
+        device = next(iter(td.values())).device
+    ret = torch.tensor([], device=device)
     for v in td.values():
         ret = torch.cat((ret, torch.flatten(v)), dim=0)
     return ret
+
+
+def generate_activities(model, path, epoch_range, training_methods, attachments, ds_loader, device=None):
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    architecture = str.split('/')[-1]
+    for training_method in training_methods:
+        for attachment in attachments:
+            for i in epoch_range:
+                print(f'{path}/{training_method}_{architecture}{attachment}/{i}')
+                load_model(model, f'{path}/{training_method}_{architecture}{attachment}/{i}')
+                std_activity = get_activity(model, model.get_relevant_layers(), ds_loader)
+                save_data(std_activity, f'{path}/activities/{training_method}_{architecture}{attachment}/{i}')
 
 
 class Regularization:
@@ -198,11 +223,14 @@ class LbRegularization(Regularization):
 
 
 def load_mnist():
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor()
+    ])
     combined = []
-    train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=transform, download=True)
     train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
     combined.append(train_dataset)
-    test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
+    test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=transform, download=True)
     test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 
@@ -217,11 +245,14 @@ def load_mnist():
 
 
 def load_cifar10():
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor()
+    ])
     combined = []
-    train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=transform, download=True)
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=6)
     combined.append(train_dataset)
-    test_dataset = torchvision.datasets.CIFAR10('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
+    test_dataset = torchvision.datasets.CIFAR10('./datasets', train=False, transform=transform, download=True)
     test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 
@@ -232,11 +263,14 @@ def load_cifar10():
 
 
 def load_fashion_mnist():
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor()
+    ])
     combined = []
-    train_dataset = torchvision.datasets.FashionMNIST('./datasets', train=True, transform=torchvision.transforms.ToTensor(), download=True)
+    train_dataset = torchvision.datasets.FashionMNIST('./datasets', train=True, transform=transform, download=True)
     train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
     combined.append(train_dataset)
-    test_dataset = torchvision.datasets.FashionMNIST('./datasets', train=False, transform=torchvision.transforms.ToTensor(), download=True)
+    test_dataset = torchvision.datasets.FashionMNIST('./datasets', train=False, transform=transform, download=True)
     test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 

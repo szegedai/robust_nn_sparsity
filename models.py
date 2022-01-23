@@ -34,7 +34,7 @@ class VGG2(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
         self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
-        self.linear_0 = nn.Linear(32 * (input_shape[1] // 2 * input_shape[2] // 2), num_classes)
+        self.linear_0 = nn.Linear(32 * (input_shape[1] // 2) * (input_shape[2] // 2), num_classes)
 
     def forward(self, x):
         x = self.max_pool(self.relu(self.conv2d_0(x)))
@@ -55,7 +55,7 @@ class VGG2BN(nn.Module):
 
         self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
         self.bn_0 = nn.BatchNorm2d(32)
-        self.linear_0 = nn.Linear(32 * (input_shape[1] // 2 * input_shape[2] // 2), num_classes)
+        self.linear_0 = nn.Linear(32 * (input_shape[1] // 2) * (input_shape[2] // 2), num_classes)
 
     def forward(self, x):
         x = self.max_pool(self.relu(self.bn_0(self.conv2d_0(x))))
@@ -76,7 +76,7 @@ class VGG4(nn.Module):
 
         self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
         self.conv2d_1 = nn.Conv2d(32, 64, (5, 5), padding='same')
-        self.linear_0 = nn.Linear(64 * (input_shape[1] // (2 * 2) * input_shape[2] // (2 * 2)), 1024)
+        self.linear_0 = nn.Linear(64 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
         self.linear_1 = nn.Linear(1024, num_classes)
 
     def forward(self, x):
@@ -102,7 +102,7 @@ class VGG4BN(nn.Module):
         self.bn_0 = nn.BatchNorm2d(32)
         self.conv2d_1 = nn.Conv2d(32, 64, (5, 5), padding='same')
         self.bn_1 = nn.BatchNorm2d(64)
-        self.linear_0 = nn.Linear(64 * (input_shape[1] // (2 * 2) * input_shape[2] // (2 * 2)), 1024)
+        self.linear_0 = nn.Linear(64 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
         self.linear_1 = nn.Linear(1024, num_classes)
 
     def forward(self, x):
@@ -128,11 +128,11 @@ class VGG6(nn.Module):
         self.max_pool = nn.MaxPool2d((2, 2))
         self.relu = nn.ReLU(inplace=True)
 
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
-        self.conv2d_1 = nn.Conv2d(32, 32, (5, 5), padding='same')
-        self.conv2d_2 = nn.Conv2d(32, 64, (5, 5), padding='same')
-        self.conv2d_3 = nn.Conv2d(64, 64, (5, 5), padding='same')
-        self.linear_0 = nn.Linear(64 * (input_shape[1] // (2 * 2) * input_shape[2] // (2 * 2)), 1024)
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (3, 3), padding='same')
+        self.conv2d_1 = nn.Conv2d(32, 32, (3, 3), padding='same')
+        self.conv2d_2 = nn.Conv2d(32, 64, (3, 3), padding='same')
+        self.conv2d_3 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.linear_0 = nn.Linear(64 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
         self.linear_1 = nn.Linear(1024, num_classes)
 
     def forward(self, x):
@@ -158,15 +158,15 @@ class VGG6BN(nn.Module):
         self.max_pool = nn.MaxPool2d((2, 2))
         self.relu = nn.ReLU(inplace=True)
 
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (3, 3), padding='same')
         self.bn_0 = nn.BatchNorm2d(32)
-        self.conv2d_1 = nn.Conv2d(32, 32, (5, 5), padding='same')
+        self.conv2d_1 = nn.Conv2d(32, 32, (3, 3), padding='same')
         self.bn_1 = nn.BatchNorm2d(32)
-        self.conv2d_2 = nn.Conv2d(32, 64, (5, 5), padding='same')
+        self.conv2d_2 = nn.Conv2d(32, 64, (3, 3), padding='same')
         self.bn_2 = nn.BatchNorm2d(64)
-        self.conv2d_3 = nn.Conv2d(64, 64, (5, 5), padding='same')
+        self.conv2d_3 = nn.Conv2d(64, 64, (3, 3), padding='same')
         self.bn_3 = nn.BatchNorm2d(64)
-        self.linear_0 = nn.Linear(64 * (input_shape[1] // (2 * 2) * input_shape[2] // (2 * 2)), 1024)
+        self.linear_0 = nn.Linear(64 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
         self.linear_1 = nn.Linear(1024, num_classes)
 
     def forward(self, x):
@@ -190,6 +190,147 @@ class VGG6BN(nn.Module):
         return ['bn_0', 'bn_1', 'bn_2', 'bn_3', 'linear_0']
 
 
+class VGG8(torch.nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(VGG8, self).__init__()
+        self.max_pool = nn.MaxPool2d((2, 2))
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 64, (3, 3), padding='same')
+        self.conv2d_1 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.conv2d_2 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.conv2d_3 = nn.Conv2d(64, 128, (3, 3), padding='same')
+        self.conv2d_4 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.conv2d_5 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.linear_0 = nn.Linear(128 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
+        self.linear_1 = nn.Linear(1024, num_classes)
+
+    def forward(self, x):
+        x = self.relu(self.conv2d_0(x))
+        x = self.relu(self.conv2d_1(x))
+        x = self.relu(self.conv2d_2(x))
+        x = self.max_pool(x)
+        x = self.relu(self.conv2d_3(x))
+        x = self.relu(self.conv2d_4(x))
+        x = self.relu(self.conv2d_5(x))
+        x = self.max_pool(x)
+        x = torch.flatten(x, 1)
+        x = self.relu(self.linear_0(x))
+        x = self.linear_1(x)
+        return x
+
+
+class VGG10(torch.nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(VGG10, self).__init__()
+        self.max_pool = nn.MaxPool2d((2, 2))
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 64, (3, 3), padding='same')
+        self.conv2d_1 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.conv2d_2 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.conv2d_3 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.conv2d_4 = nn.Conv2d(64, 128, (3, 3), padding='same')
+        self.conv2d_5 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.conv2d_6 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.conv2d_7 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.linear_0 = nn.Linear(128 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
+        self.linear_1 = nn.Linear(1024, num_classes)
+
+    def forward(self, x):
+        x = self.relu(self.conv2d_0(x))
+        x = self.relu(self.conv2d_1(x))
+        x = self.relu(self.conv2d_2(x))
+        x = self.relu(self.conv2d_3(x))
+        x = self.max_pool(x)
+        x = self.relu(self.conv2d_4(x))
+        x = self.relu(self.conv2d_5(x))
+        x = self.relu(self.conv2d_6(x))
+        x = self.relu(self.conv2d_7(x))
+        x = self.max_pool(x)
+        x = torch.flatten(x, 1)
+        x = self.relu(self.linear_0(x))
+        x = self.linear_1(x)
+        return x
+
+
+class VGG11(torch.nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(VGG11, self).__init__()
+        self.max_pool = nn.MaxPool2d((2, 2))
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 64, (3, 3), padding='same')
+        self.conv2d_1 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.conv2d_2 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.conv2d_3 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.conv2d_4 = nn.Conv2d(64, 128, (3, 3), padding='same')
+        self.conv2d_5 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.conv2d_6 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.conv2d_7 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.linear_0 = nn.Linear(128 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 4096)
+        self.linear_1 = nn.Linear(4096, 4096)
+        self.linear_2 = nn.Linear(4096, num_classes)
+
+    def forward(self, x):
+        x = self.relu(self.conv2d_0(x))
+        x = self.relu(self.conv2d_1(x))
+        x = self.relu(self.conv2d_2(x))
+        x = self.relu(self.conv2d_3(x))
+        x = self.max_pool(x)
+        x = self.relu(self.conv2d_4(x))
+        x = self.relu(self.conv2d_5(x))
+        x = self.relu(self.conv2d_6(x))
+        x = self.relu(self.conv2d_7(x))
+        x = self.max_pool(x)
+        x = torch.flatten(x, 1)
+        x = self.relu(self.linear_0(x))
+        x = self.relu(self.linear_1(x))
+        x = self.linear_2(x)
+        return x
+
+'''class VGG11(torchvision.models.VGG):
+    def __init__(self, num_classes, use_dropout=False, **kwargs):
+        super(VGG11, self).__init__(
+            torchvision.models.vgg.make_layers(torchvision.models.vgg.cfgs['A'], batch_norm=False),
+            num_classes,
+            **kwargs
+        )
+        if not use_dropout:
+            self.classifier[2] = nn.Identity()
+            self.classifier[5] = nn.Identity()
+
+    def forward(self, x):
+        return super(VGG11, self).forward(x)
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['features.0', 'features.3', 'features.6', 'features.8',
+                'features.11', 'features.13', 'features.16', 'features.18',
+                'classifier.0', 'classifier.3']
+
+
+class VGG11BN(torchvision.models.VGG):
+    def __init__(self, num_classes, use_dropout=False, **kwargs):
+        super(VGG11BN, self).__init__(
+            torchvision.models.vgg.make_layers(torchvision.models.vgg.cfgs['A'], batch_norm=True),
+            num_classes,
+            **kwargs
+        )
+        if not use_dropout:
+            self.classifier[2] = nn.Identity()
+            self.classifier[5] = nn.Identity()
+
+    def forward(self, x):
+        return super(VGG11BN, self).forward(x)
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['features.1', 'features.5', 'features.9', 'features.12',
+                'features.16', 'features.19', 'features.23', 'features.26',
+                'classifier.0', 'classifier.3']'''
+
+
 class VGG19(torchvision.models.VGG):
     def __init__(self, num_classes, use_dropout=False, **kwargs):
         super(VGG19, self).__init__(
@@ -210,7 +351,7 @@ class VGG19(torchvision.models.VGG):
                 'features.10', 'features.12', 'features.14', 'features.16',
                 'features.19', 'features.21', 'features.23', 'features.25',
                 'features.28', 'features.30', 'features.32', 'features.34',
-                'classifier.0', 'classifier.3', 'classifier.6']
+                'classifier.0', 'classifier.3']
 
 
 class VGG19BN(torchvision.models.VGG):
@@ -233,7 +374,7 @@ class VGG19BN(torchvision.models.VGG):
                 'features.15', 'features.18', 'features.21', 'features.24',
                 'features.28', 'features.31', 'features.34', 'features.37',
                 'features.41', 'features.44', 'features.47', 'features.50',
-                'classifier.0', 'classifier.3', 'classifier.6']
+                'classifier.0', 'classifier.3']
 
 
 class ResNet18(torchvision.models.ResNet):
