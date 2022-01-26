@@ -27,45 +27,8 @@ def load_model(model, path):
     model.load_state_dict(torch.load(path)['model_state'])
 
 
-class VGG2(nn.Module):
-    def __init__(self, input_shape, num_classes):
-        super(VGG2, self).__init__()
-        self.max_pool = nn.MaxPool2d((2, 2))
-        self.relu = nn.ReLU(inplace=True)
-
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
-        self.linear_0 = nn.Linear(32 * (input_shape[1] // 2) * (input_shape[2] // 2), num_classes)
-
-    def forward(self, x):
-        x = self.max_pool(self.relu(self.conv2d_0(x)))
-        x = torch.flatten(x, 1)
-        x = self.linear_0(x)
-        return x
-
-    @staticmethod
-    def get_relevant_layers():
-        return ['conv2d_0']
-
-
-class VGG2BN(nn.Module):
-    def __init__(self, input_shape, num_classes):
-        super(VGG2BN, self).__init__()
-        self.max_pool = nn.MaxPool2d((2, 2))
-        self.relu = nn.ReLU(inplace=True)
-
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
-        self.bn_0 = nn.BatchNorm2d(32)
-        self.linear_0 = nn.Linear(32 * (input_shape[1] // 2) * (input_shape[2] // 2), num_classes)
-
-    def forward(self, x):
-        x = self.max_pool(self.relu(self.bn_0(self.conv2d_0(x))))
-        x = torch.flatten(x, 1)
-        x = self.linear_0(x)
-        return x
-
-    @staticmethod
-    def get_relevant_layers():
-        return ['bn_0']
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 class VGG4(nn.Module):
@@ -122,104 +85,6 @@ class VGG4BN(nn.Module):
         return ['bn_0', 'bn_1', 'linear_0']
 
 
-class VGG6(nn.Module):
-    def __init__(self, input_shape, num_classes):
-        super(VGG6, self).__init__()
-        self.max_pool = nn.MaxPool2d((2, 2))
-        self.relu = nn.ReLU(inplace=True)
-
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (3, 3), padding='same')
-        self.conv2d_1 = nn.Conv2d(32, 32, (3, 3), padding='same')
-        self.conv2d_2 = nn.Conv2d(32, 64, (3, 3), padding='same')
-        self.conv2d_3 = nn.Conv2d(64, 64, (3, 3), padding='same')
-        self.linear_0 = nn.Linear(64 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
-        self.linear_1 = nn.Linear(1024, num_classes)
-
-    def forward(self, x):
-        x = self.relu(self.conv2d_0(x))
-        x = self.relu(self.conv2d_1(x))
-        x = self.max_pool(x)
-        x = self.relu(self.conv2d_2(x))
-        x = self.relu(self.conv2d_3(x))
-        x = self.max_pool(x)
-        x = torch.flatten(x, 1)
-        x = self.relu(self.linear_0(x))
-        x = self.linear_1(x)
-        return x
-
-    @staticmethod
-    def get_relevant_layers():
-        return ['conv2d_0', 'conv2d_1', 'conv2d_2', 'conv2d_3', 'linear_0']
-
-
-class VGG6BN(nn.Module):
-    def __init__(self, input_shape, num_classes):
-        super(VGG6BN, self).__init__()
-        self.max_pool = nn.MaxPool2d((2, 2))
-        self.relu = nn.ReLU(inplace=True)
-
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (3, 3), padding='same')
-        self.bn_0 = nn.BatchNorm2d(32)
-        self.conv2d_1 = nn.Conv2d(32, 32, (3, 3), padding='same')
-        self.bn_1 = nn.BatchNorm2d(32)
-        self.conv2d_2 = nn.Conv2d(32, 64, (3, 3), padding='same')
-        self.bn_2 = nn.BatchNorm2d(64)
-        self.conv2d_3 = nn.Conv2d(64, 64, (3, 3), padding='same')
-        self.bn_3 = nn.BatchNorm2d(64)
-        self.linear_0 = nn.Linear(64 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
-        self.linear_1 = nn.Linear(1024, num_classes)
-
-    def forward(self, x):
-        x = self.conv2d_0(x)
-        x = self.relu(self.bn_0(x))
-        x = self.conv2d_1(x)
-        x = self.relu(self.bn_1(x))
-        x = self.max_pool(x)
-        x = self.conv2d_2(x)
-        x = self.relu(self.bn_2(x))
-        x = self.conv2d_3(x)
-        x = self.relu(self.bn_3(x))
-        x = self.max_pool(x)
-        x = torch.flatten(x, 1)
-        x = self.relu(self.linear_0(x))
-        x = self.linear_1(x)
-        return x
-
-    @staticmethod
-    def get_relevant_layers():
-        return ['bn_0', 'bn_1', 'bn_2', 'bn_3', 'linear_0']
-
-
-class VGG8(torch.nn.Module):
-    def __init__(self, input_shape, num_classes):
-        super(VGG8, self).__init__()
-        self.max_pool = nn.MaxPool2d((2, 2))
-        self.relu = nn.ReLU(inplace=True)
-
-        self.conv2d_0 = nn.Conv2d(input_shape[0], 64, (3, 3), padding='same')
-        self.conv2d_1 = nn.Conv2d(64, 64, (3, 3), padding='same')
-        self.conv2d_2 = nn.Conv2d(64, 64, (3, 3), padding='same')
-        self.conv2d_3 = nn.Conv2d(64, 128, (3, 3), padding='same')
-        self.conv2d_4 = nn.Conv2d(128, 128, (3, 3), padding='same')
-        self.conv2d_5 = nn.Conv2d(128, 128, (3, 3), padding='same')
-        self.linear_0 = nn.Linear(128 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
-        self.linear_1 = nn.Linear(1024, num_classes)
-
-    def forward(self, x):
-        x = self.relu(self.conv2d_0(x))
-        x = self.relu(self.conv2d_1(x))
-        x = self.relu(self.conv2d_2(x))
-        x = self.max_pool(x)
-        x = self.relu(self.conv2d_3(x))
-        x = self.relu(self.conv2d_4(x))
-        x = self.relu(self.conv2d_5(x))
-        x = self.max_pool(x)
-        x = torch.flatten(x, 1)
-        x = self.relu(self.linear_0(x))
-        x = self.linear_1(x)
-        return x
-
-
 class VGG10(torch.nn.Module):
     def __init__(self, input_shape, num_classes):
         super(VGG10, self).__init__()
@@ -252,6 +117,66 @@ class VGG10(torch.nn.Module):
         x = self.relu(self.linear_0(x))
         x = self.linear_1(x)
         return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['conv2d_0', 'conv2d_1', 'conv2d_2', 'conv2d_3', 'conv2d_4', 'conv2d_5', 'conv2d_6', 'conv2d_7',
+                'linear_0']
+
+
+class VGG10BN(torch.nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(VGG10BN, self).__init__()
+        self.max_pool = nn.MaxPool2d((2, 2))
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 64, (3, 3), padding='same')
+        self.bn_0 = nn.BatchNorm2d(64)
+        self.conv2d_1 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.bn_1 = nn.BatchNorm2d(64)
+        self.conv2d_2 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.bn_2 = nn.BatchNorm2d(64)
+        self.conv2d_3 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.bn_3 = nn.BatchNorm2d(64)
+        self.conv2d_4 = nn.Conv2d(64, 128, (3, 3), padding='same')
+        self.bn_4 = nn.BatchNorm2d(128)
+        self.conv2d_5 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.bn_5 = nn.BatchNorm2d(128)
+        self.conv2d_6 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.bn_6 = nn.BatchNorm2d(128)
+        self.conv2d_7 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.bn_7 = nn.BatchNorm2d(128)
+        self.linear_0 = nn.Linear(128 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 1024)
+        self.linear_1 = nn.Linear(1024, num_classes)
+
+    def forward(self, x):
+        x = self.conv2d_0(x)
+        x = self.relu(self.bn_0(x))
+        x = self.conv2d_1(x)
+        x = self.relu(self.bn_1(x))
+        x = self.conv2d_2(x)
+        x = self.relu(self.bn_2(x))
+        x = self.conv2d_3(x)
+        x = self.relu(self.bn_3(x))
+        x = self.max_pool(x)
+        x = self.conv2d_4(x)
+        x = self.relu(self.bn_4(x))
+        x = self.conv2d_5(x)
+        x = self.relu(self.bn_5(x))
+        x = self.conv2d_6(x)
+        x = self.relu(self.bn_6(x))
+        x = self.conv2d_7(x)
+        x = self.relu(self.bn_7(x))
+        x = self.max_pool(x)
+        x = torch.flatten(x, 1)
+        x = self.relu(self.linear_0(x))
+        x = self.linear_1(x)
+        return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['bn_0', 'bn_1', 'bn_2', 'bn_3', 'bn_4', 'bn_5', 'bn_6', 'bn_7',
+                'linear_0']
 
 
 class VGG11(torch.nn.Module):
@@ -288,6 +213,68 @@ class VGG11(torch.nn.Module):
         x = self.relu(self.linear_1(x))
         x = self.linear_2(x)
         return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['conv2d_0', 'conv2d_1', 'conv2d_2', 'conv2d_3', 'conv2d_4', 'conv2d_5', 'conv2d_6', 'conv2d_7',
+                'linear_0', 'linear_1']
+
+
+class VGG11BN(torch.nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(VGG11BN, self).__init__()
+        self.max_pool = nn.MaxPool2d((2, 2))
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2d_0 = nn.Conv2d(input_shape[0], 64, (3, 3), padding='same')
+        self.bn_0 = nn.BatchNorm2d(64)
+        self.conv2d_1 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.bn_1 = nn.BatchNorm2d(64)
+        self.conv2d_2 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.bn_2 = nn.BatchNorm2d(64)
+        self.conv2d_3 = nn.Conv2d(64, 64, (3, 3), padding='same')
+        self.bn_3 = nn.BatchNorm2d(64)
+        self.conv2d_4 = nn.Conv2d(64, 128, (3, 3), padding='same')
+        self.bn_4 = nn.BatchNorm2d(128)
+        self.conv2d_5 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.bn_5 = nn.BatchNorm2d(128)
+        self.conv2d_6 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.bn_6 = nn.BatchNorm2d(128)
+        self.conv2d_7 = nn.Conv2d(128, 128, (3, 3), padding='same')
+        self.bn_7 = nn.BatchNorm2d(128)
+        self.linear_0 = nn.Linear(128 * (input_shape[1] // 2 ** 2) * (input_shape[2] // 2 ** 2), 4096)
+        self.linear_1 = nn.Linear(4096, 4096)
+        self.linear_2 = nn.Linear(4096, num_classes)
+
+    def forward(self, x):
+        x = self.conv2d_0(x)
+        x = self.relu(self.bn_0(x))
+        x = self.conv2d_1(x)
+        x = self.relu(self.bn_1(x))
+        x = self.conv2d_2(x)
+        x = self.relu(self.bn_2(x))
+        x = self.conv2d_3(x)
+        x = self.relu(self.bn_3(x))
+        x = self.max_pool(x)
+        x = self.conv2d_4(x)
+        x = self.relu(self.bn_4(x))
+        x = self.conv2d_5(x)
+        x = self.relu(self.bn_5(x))
+        x = self.conv2d_6(x)
+        x = self.relu(self.bn_6(x))
+        x = self.conv2d_7(x)
+        x = self.relu(self.bn_7(x))
+        x = self.max_pool(x)
+        x = torch.flatten(x, 1)
+        x = self.relu(self.linear_0(x))
+        x = self.relu(self.linear_1(x))
+        x = self.linear_2(x)
+        return x
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['bn_0', 'bn_1', 'bn_2', 'bn_3', 'bn_4', 'bn_5', 'bn_6', 'bn_7',
+                'linear_0', 'linear_1']
 
 '''class VGG11(torchvision.models.VGG):
     def __init__(self, num_classes, use_dropout=False, **kwargs):

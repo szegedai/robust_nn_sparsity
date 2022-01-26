@@ -172,18 +172,18 @@ def simplify_tdict(td, device=None):  # td = tensor dict
     return ret
 
 
-def generate_activities(model, path, epoch_range, training_methods, attachments, ds_loader, device=None):
+def generate_activities(model, from_path, to_path, epoch_range, training_methods, attachments, ds_loader, device=None):
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
-    architecture = str.split('/')[-1]
+    architecture = from_path.split('/')[-1]
     for training_method in training_methods:
         for attachment in attachments:
             for i in epoch_range:
-                print(f'{path}/{training_method}_{architecture}{attachment}/{i}')
-                load_model(model, f'{path}/{training_method}_{architecture}{attachment}/{i}')
+                print(f'{from_path}/{training_method}_{architecture}{attachment}/{i}')
+                load_model(model, f'{from_path}/{training_method}_{architecture}{attachment}/{i}')
                 std_activity = get_activity(model, model.get_relevant_layers(), ds_loader)
-                save_data(std_activity, f'{path}/activities/{training_method}_{architecture}{attachment}/{i}')
+                save_data(std_activity, f'{to_path}/{training_method}_{architecture}{attachment}/{i}')
 
 
 class Regularization:

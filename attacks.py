@@ -53,3 +53,10 @@ class LinfProjectedGradientDescendAttack:
 
 
 LinfPGDAttack = LinfProjectedGradientDescendAttack
+
+
+parameter_presets = {
+    'MNIST': {'eps': 0.3, 'step_size': 0.01, 'steps': 40},
+    'FashionMNIST': {'eps': 0.1, 'step_size': 0.01, 'steps': 40},
+    'CIFAR10': {'eps': 8 / 255, 'step_size': 2 / 255, 'steps': 10}
+}
