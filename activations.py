@@ -135,6 +135,56 @@ def get_inactivity_ratio(activations):  # works with activation dicts and activi
     return num_inactives / num_activations
 
 
+def flatten_tdict(td):  # td = tensor dict
+    device = next(iter(td.values())).device
+    ret = torch.tensor([], device=device)
+    for v in td.values():
+        ret = torch.cat((ret, torch.flatten(v)), dim=0)
+    return ret
+
+
+def split_tdict(td):
+    ret = []
+    for i in range(next(iter(td.values())).shape[0]):
+        tmp = {}
+        for k, v in td.items():
+            tmp[k] = v[i]
+        ret.append(tmp)
+    return ret
+
+
+def filter_tdict(d, filters):
+    ret = {}
+    for k, v in d.items():
+        for f in filters:
+            if f in k:
+                ret[k] = v
+                break
+    return ret
+
+
+def activity_distance(model, batch, activity_p, dict_filters=None, device=None):
+    if device is None:
+        device = next(iter(activity_p.values())).device
+    with torch.no_grad():
+        distance = lambda p, q: torch.mean(torch.abs(p - q), dim=0)
+        extractor = ActivationExtractor(model, model.get_relevant_layers())
+        if dict_filters is None:
+            activity_p = flatten_tdict(activity_p)
+            activations = split_tdict(extractor(batch))
+        else:
+            activity_p = flatten_tdict(filter_tdict(activity_p, dict_filters))
+            activations = split_tdict(filter_tdict(extractor(batch), dict_filters))
+
+        ret = torch.empty(len(batch), device=device)
+        i = 0
+        for activation in activations:
+            d = distance(activity_p, torch.sign(flatten_tdict(activation)))
+            ret[i] = d
+            i += 1
+    return ret
+
+
 # WIP!
 def reinitialize_inactive_neuron_weights(model: nn.Module, activations: dict, layers=None, ration=1.0):
     if layers is None:

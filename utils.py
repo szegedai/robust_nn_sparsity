@@ -163,15 +163,6 @@ def append_activations_to_log(log_file, checkpoint_dir, model, ds_loader, attack
     lm.write_all()
 
 
-def simplify_tdict(td, device=None):  # td = tensor dict
-    if device is None:
-        device = next(iter(td.values())).device
-    ret = torch.tensor([], device=device)
-    for v in td.values():
-        ret = torch.cat((ret, torch.flatten(v)), dim=0)
-    return ret
-
-
 def generate_activities(model, from_path, to_path, epoch_range, training_methods, attachments, ds_loader, device=None):
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -222,16 +213,16 @@ class LbRegularization(Regularization):
         return sum(((p + p.abs()) / 2).pow(2.0).sum() for p in self.model.parameters())
 
 
-def load_mnist():
+def load_mnist(batch_size=50):
     transform = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor()
     ])
     combined = []
     train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=transform, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
     combined.append(train_dataset)
     test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=transform, download=True)
-    test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=6)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 
     # train_dataset, val_dataset = split_dataset(train_dataset, val_split)
@@ -239,42 +230,42 @@ def load_mnist():
     # combined.append(val_dataset)
 
     combined_dataset = MultiDataset(*combined)
-    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=6)
+    combined_loader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
 
     return train_loader, test_loader, combined_loader
 
 
-def load_cifar10():
+def load_cifar10(batch_size=128):
     transform = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor()
     ])
     combined = []
     train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=transform, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=6)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
     combined.append(train_dataset)
     test_dataset = torchvision.datasets.CIFAR10('./datasets', train=False, transform=transform, download=True)
-    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=6)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 
     combined_dataset = MultiDataset(*combined)
-    combined_loader = DataLoader(combined_dataset, batch_size=128, shuffle=True, num_workers=6)
+    combined_loader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
 
     return train_loader, test_loader, combined_loader
 
 
-def load_fashion_mnist():
+def load_fashion_mnist(batch_size=50):
     transform = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor()
     ])
     combined = []
     train_dataset = torchvision.datasets.FashionMNIST('./datasets', train=True, transform=transform, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True, num_workers=6)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
     combined.append(train_dataset)
     test_dataset = torchvision.datasets.FashionMNIST('./datasets', train=False, transform=transform, download=True)
-    test_loader = DataLoader(test_dataset, batch_size=50, shuffle=False, num_workers=6)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 
     combined_dataset = MultiDataset(*combined)
-    combined_loader = DataLoader(combined_dataset, batch_size=50, shuffle=True, num_workers=6)
+    combined_loader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
 
     return train_loader, test_loader, combined_loader
