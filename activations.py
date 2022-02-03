@@ -167,7 +167,7 @@ def activity_distance(model, batch, activity_p, dict_filters=None, device=None):
     if device is None:
         device = next(iter(activity_p.values())).device
     with torch.no_grad():
-        distance = lambda p, q: torch.mean(torch.abs(p - q), dim=0)
+        distance = lambda p, q: torch.mean(torch.square(p - q), dim=0)
         extractor = ActivationExtractor(model, model.get_relevant_layers())
         if dict_filters is None:
             activity_p = flatten_tdict(activity_p)

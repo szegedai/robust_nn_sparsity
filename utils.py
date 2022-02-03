@@ -67,6 +67,23 @@ class MultiDataset(torch.utils.data.Dataset):
         return cumulative_length
 
 
+class RandomDataset(torch.utils.data.Dataset):
+    def __init__(self, length, data_shape, bounds=(0.0, 1.0), add_labels=False):
+        super(RandomDataset, self).__init__()
+        self.length = length
+        self.data_shape = data_shape
+        self.bounds = bounds
+        self.add_labels = add_labels
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, index):
+        if self.add_labels:
+            return torch.empty(self.data_shape).uniform_(*self.bounds), -1
+        return torch.empty(self.data_shape).uniform_(*self.bounds)
+
+
 class LogManager:
     def __init__(self, to_file=None, from_file=None):
         self.file = to_file
@@ -213,59 +230,65 @@ class LbRegularization(Regularization):
         return sum(((p + p.abs()) / 2).pow(2.0).sum() for p in self.model.parameters())
 
 
-def load_mnist(batch_size=50):
+def create_data_loaders(datasets, batch_size, shuffle=True, num_workers=4):
+    ds_loaders = []
+    for ds in datasets:
+        ds_loaders.append(DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers))
+    return ds_loaders
+
+
+def load_mnist():
     transform = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor()
     ])
     combined = []
     train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=transform, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
     combined.append(train_dataset)
     test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=transform, download=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=6)
-    combined.append(test_dataset)
-
-    # train_dataset, val_dataset = split_dataset(train_dataset, val_split)
-    # val_loader = DataLoader(val_dataset, batch_size=50, shuffle=False, num_workers=6)
-    # combined.append(val_dataset)
-
-    combined_dataset = MultiDataset(*combined)
-    combined_loader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
-
-    return train_loader, test_loader, combined_loader
-
-
-def load_cifar10(batch_size=128):
-    transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor()
-    ])
-    combined = []
-    train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=transform, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
-    combined.append(train_dataset)
-    test_dataset = torchvision.datasets.CIFAR10('./datasets', train=False, transform=transform, download=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 
     combined_dataset = MultiDataset(*combined)
-    combined_loader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
 
-    return train_loader, test_loader, combined_loader
+    return train_dataset, test_dataset, combined_dataset
 
 
-def load_fashion_mnist(batch_size=50):
+def load_fashion_mnist():
     transform = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor()
     ])
     combined = []
     train_dataset = torchvision.datasets.FashionMNIST('./datasets', train=True, transform=transform, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
     combined.append(train_dataset)
     test_dataset = torchvision.datasets.FashionMNIST('./datasets', train=False, transform=transform, download=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=6)
     combined.append(test_dataset)
 
     combined_dataset = MultiDataset(*combined)
-    combined_loader = DataLoader(combined_dataset, batch_size=batch_size, shuffle=True, num_workers=6)
 
-    return train_loader, test_loader, combined_loader
+    return train_dataset, test_dataset, combined_dataset
+
+
+def load_cifar10():
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor()
+    ])
+    combined = []
+    train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=transform, download=True)
+    combined.append(train_dataset)
+    test_dataset = torchvision.datasets.CIFAR10('./datasets', train=False, transform=transform, download=True)
+    combined.append(test_dataset)
+
+    combined_dataset = MultiDataset(*combined)
+
+    return train_dataset, test_dataset, combined_dataset
+
+
+def setup_mnist(batch_size=50):
+    return create_data_loaders(load_mnist(), batch_size, True, 6)
+
+
+def setup_fashion_mnist(batch_size=50):
+    return create_data_loaders(load_fashion_mnist(), batch_size, True, 6)
+
+
+def setup_cifar10(batch_size=128):
+    return create_data_loaders(load_cifar10(), batch_size, True, 8)
