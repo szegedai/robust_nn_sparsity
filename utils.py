@@ -67,9 +67,9 @@ class MultiDataset(torch.utils.data.Dataset):
         return cumulative_length
 
 
-class RandomDataset(torch.utils.data.Dataset):
+class UniformRandomDataset(torch.utils.data.Dataset):
     def __init__(self, length, data_shape, bounds=(0.0, 1.0), add_labels=False):
-        super(RandomDataset, self).__init__()
+        super(UniformRandomDataset, self).__init__()
         self.length = length
         self.data_shape = data_shape
         self.bounds = bounds
@@ -82,6 +82,25 @@ class RandomDataset(torch.utils.data.Dataset):
         if self.add_labels:
             return torch.empty(self.data_shape).uniform_(*self.bounds), -1
         return torch.empty(self.data_shape).uniform_(*self.bounds)
+
+
+class NormalRandomDataset(torch.utils.data.Dataset):
+    def __init__(self, length, data_shape, mean=0.0, std=1.0, bounds=(0.0, 1.0), add_labels=False):
+        super(NormalRandomDataset, self).__init__()
+        self.length = length
+        self.data_shape = data_shape
+        self.mean = mean
+        self.std = std
+        self.bounds = bounds
+        self.add_labels = add_labels
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, index):
+        if self.add_labels:
+            return torch.empty(self.data_shape).normal_(mean=self.mean, std=self.std).clamp_(*self.bounds), -1
+        return torch.empty(self.data_shape).normal_(mean=self.mean, std=self.std).clamp_(*self.bounds)
 
 
 class LogManager:
