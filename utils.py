@@ -6,7 +6,7 @@ import os
 from torch.utils.data import DataLoader
 from intervaltree import IntervalTree
 from models import load_model
-from activations import get_activations, get_inactivity_ratio, get_activity
+from activations import get_max_activations, get_inactivity_ratio, get_activity
 
 
 def save_data(data, path):
@@ -168,11 +168,11 @@ def append_activations_to_log(log_file, checkpoint_dir, model, ds_loader, attack
         if i % sampling == 0:
             load_model(model, f'{checkpoint_dir}/{i}')
             if check_std_activations:
-                #lm.records[i - 1]['std_inactivity_ratio'] = get_inactivity_ratio(get_activations(model, model.get_relevant_layers(), ds_loader))
-                std_inactivity_ratio = np.append(std_inactivity_ratio, get_inactivity_ratio(get_activations(model, model.get_relevant_layers(), ds_loader)))
+                #lm.records[i - 1]['std_inactivity_ratio'] = get_inactivity_ratio(get_max_activations(model, model.get_relevant_layers(), ds_loader))
+                std_inactivity_ratio = np.append(std_inactivity_ratio, get_inactivity_ratio(get_max_activations(model, model.get_relevant_layers(), ds_loader)))
             if check_adv_activations:
-                #lm.records[i - 1]['adv_inactivity_ratio'] = get_inactivity_ratio(get_activations(model, model.get_relevant_layers(), ds_loader, attack))
-                adv_inactivity_ratio = np.append(adv_inactivity_ratio, get_inactivity_ratio(get_activations(model, model.get_relevant_layers(), ds_loader, attack)))
+                #lm.records[i - 1]['adv_inactivity_ratio'] = get_inactivity_ratio(get_max_activations(model, model.get_relevant_layers(), ds_loader, attack))
+                adv_inactivity_ratio = np.append(adv_inactivity_ratio, get_inactivity_ratio(get_max_activations(model, model.get_relevant_layers(), ds_loader, attack)))
         else:
             if check_std_activations:
                 std_inactivity_ratio = np.append(std_inactivity_ratio, np.nan)
@@ -301,6 +301,21 @@ def load_cifar10():
     return train_dataset, test_dataset, combined_dataset
 
 
+def load_svhn():
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor()
+    ])
+    combined = []
+    train_dataset = torchvision.datasets.SVHN('./datasets', split='train', transform=transform, download=True)
+    combined.append(train_dataset)
+    test_dataset = torchvision.datasets.SVHN('./datasets', split='test', transform=transform, download=True)
+    combined.append(test_dataset)
+
+    combined_dataset = MultiDataset(*combined)
+
+    return train_dataset, test_dataset, combined_dataset
+
+
 def setup_mnist(batch_size=50):
     return create_data_loaders(load_mnist(), batch_size, True, 6)
 
@@ -311,3 +326,7 @@ def setup_fashion_mnist(batch_size=50):
 
 def setup_cifar10(batch_size=128):
     return create_data_loaders(load_cifar10(), batch_size, True, 8)
+
+
+def setup_svhn(batch_size=128):
+    return create_data_loaders(load_svhn(), batch_size, True, 8)

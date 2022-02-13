@@ -43,7 +43,42 @@ class ActivationExtractor(nn.Module):
         return self.activations
 
 
-def get_activations(model: nn.Module, layers, dataloader, attack=None):
+def get_activation_sums(model, layers, dataloader, attack=None, use_sign=False):
+    if use_sign:
+        pre_sum_fn = torch.sign
+    else:
+        pre_sum_fn = lambda x: x
+    with torch.no_grad():
+        model_device = next(model.parameters()).device
+        extractor = ActivationExtractor(model, layers)
+        it = iter(dataloader)
+
+        num_samples = 0
+        activation_counts = {}
+        batch = next(it)
+        batch[0], batch[1] = batch[0].to(model_device), batch[1].to(model_device)
+        num_samples += len(batch[0])
+        if attack is not None:
+            activations = extractor(attack(*batch))
+        else:
+            activations = extractor(batch[0])
+        for k, v in activations.items():
+            activation_counts[k] = torch.sum(torch.sign(v), dim=0)
+
+        while (batch := next(it, None)) is not None:
+            batch[0], batch[1] = batch[0].to(model_device), batch[1].to(model_device)
+            num_samples += len(batch[0])
+            if attack is not None:
+                activations = extractor(attack(*batch))
+            else:
+                activations = extractor(batch[0])
+            for k, v in activations.items():
+                activation_counts[k] += torch.sum(pre_sum_fn(v), dim=0)
+        extractor.remove_hooks()
+    return activation_counts, num_samples
+
+
+def get_max_activations(model: nn.Module, layers, dataloader, attack=None):
     with torch.no_grad():
         model_device = next(model.parameters()).device
         extractor = ActivationExtractor(model, layers)
@@ -71,39 +106,16 @@ def get_activations(model: nn.Module, layers, dataloader, attack=None):
     return max_activations
 
 
-def get_activation_counts(model, layers, dataloader, attack=None):
+def get_avg_activations(model, layers, dataloader, attack=None):
+    activation_sums, num_samples = get_activation_sums(model, layers, dataloader, attack, use_sign=False)
     with torch.no_grad():
-        model_device = next(model.parameters()).device
-        extractor = ActivationExtractor(model, layers)
-        it = iter(dataloader)
-
-        num_samples = 0
-        activation_counts = {}
-        batch = next(it)
-        batch[0], batch[1] = batch[0].to(model_device), batch[1].to(model_device)
-        num_samples += len(batch[0])
-        if attack is not None:
-            activations = extractor(attack(*batch))
-        else:
-            activations = extractor(batch[0])
-        for k, v in activations.items():
-            activation_counts[k] = torch.sum(torch.sign(v), dim=0)
-
-        while (batch := next(it, None)) is not None:
-            batch[0], batch[1] = batch[0].to(model_device), batch[1].to(model_device)
-            num_samples += len(batch[0])
-            if attack is not None:
-                activations = extractor(attack(*batch))
-            else:
-                activations = extractor(batch[0])
-            for k, v in activations.items():
-                activation_counts[k] += torch.sum(torch.sign(v), dim=0)
-        extractor.remove_hooks()
-    return activation_counts, num_samples
+        for k, v in activation_sums.items():
+            activation_sums[k] /= num_samples
+    return activation_sums
 
 
 def get_activity(model, layers, dataloader, attack=None):
-    activation_counts, num_samples = get_activation_counts(model, layers, dataloader, attack)
+    activation_counts, num_samples = get_activation_sums(model, layers, dataloader, attack, use_sign=True)
     with torch.no_grad():
         for k, v in activation_counts.items():
             activation_counts[k] /= num_samples  # turn count into ratios
@@ -111,7 +123,7 @@ def get_activity(model, layers, dataloader, attack=None):
 
 
 def get_inactivity(model, layers, dataloader, attack=None):
-    activation_counts, num_samples = get_activation_counts(model, layers, dataloader, attack)
+    activation_counts, num_samples = get_activation_sums(model, layers, dataloader, attack, use_sign=True)
     with torch.no_grad():
         for k, v in activation_counts.items():
             activation_counts[k] /= num_samples  # turn count into ratios
@@ -163,11 +175,22 @@ def filter_tdict(d, filters):
     return ret
 
 
-def activity_distance(model, batch, activity_p, dict_filters=None, device=None):
+def activity_distance(model, batch, activity_p, distance_fn=None, dict_filters=None, use_sign=False, device=None):
+    if use_sign:
+        pre_d_fn = torch.sign
+    else:
+        pre_d_fn = lambda x: x
     if device is None:
         device = next(iter(activity_p.values())).device
+    if distance_fn is None:
+        sigmoid = lambda x: 1 / (1 + torch.exp(-12 * (x - 0.5)))
+        #distance = lambda p, q: torch.mean(sigmoid(torch.abs(p - q)), dim=0)
+        #distance_fn = lambda p, q: torch.mean(torch.abs(p - q), dim=0)
+        def filtered_MAE(p, q):
+            mask = activity_p <= 0.1
+            return torch.sum(torch.abs(p - q) * mask) / torch.count_nonzero(mask)
+        distance_fn = filtered_MAE
     with torch.no_grad():
-        distance = lambda p, q: torch.mean(torch.square(p - q), dim=0)
         extractor = ActivationExtractor(model, model.get_relevant_layers())
         if dict_filters is None:
             activity_p = flatten_tdict(activity_p)
@@ -179,7 +202,7 @@ def activity_distance(model, batch, activity_p, dict_filters=None, device=None):
         ret = torch.empty(len(batch), device=device)
         i = 0
         for activation in activations:
-            d = distance(activity_p, torch.sign(flatten_tdict(activation)))
+            d = distance_fn(activity_p, pre_d_fn(flatten_tdict(activation)))
             ret[i] = d
             i += 1
     return ret
