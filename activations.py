@@ -118,7 +118,7 @@ def get_activity(model, layers, dataloader, attack=None):
     activation_counts, num_samples = get_activation_sums(model, layers, dataloader, attack, use_sign=True)
     with torch.no_grad():
         for k, v in activation_counts.items():
-            activation_counts[k] /= num_samples  # turn count into ratios
+            activation_counts[k] /= num_samples  # turn _count into ratios
     return activation_counts
 
 
@@ -126,7 +126,7 @@ def get_inactivity(model, layers, dataloader, attack=None):
     activation_counts, num_samples = get_activation_sums(model, layers, dataloader, attack, use_sign=True)
     with torch.no_grad():
         for k, v in activation_counts.items():
-            activation_counts[k] /= num_samples  # turn count into ratios
+            activation_counts[k] /= num_samples  # turn _count into ratios
             activation_counts[k] = 1 - activation_counts[k]
     return activation_counts
 
@@ -181,13 +181,11 @@ def activity_distance(model, batch, activity_p, distance_fn=None, dict_filters=N
     else:
         pre_d_fn = lambda x: x
     if device is None:
-        device = next(iter(activity_p.values())).device
+        device = next(model.parameters()).device
     if distance_fn is None:
-        sigmoid = lambda x: 1 / (1 + torch.exp(-12 * (x - 0.5)))
-        #distance = lambda p, q: torch.mean(sigmoid(torch.abs(p - q)), dim=0)
         #distance_fn = lambda p, q: torch.mean(torch.abs(p - q), dim=0)
         def filtered_MAE(p, q):
-            mask = activity_p <= 0.1
+            mask = activity_p == 0
             return torch.sum(torch.abs(p - q) * mask) / torch.count_nonzero(mask)
         distance_fn = filtered_MAE
     with torch.no_grad():
@@ -206,6 +204,26 @@ def activity_distance(model, batch, activity_p, distance_fn=None, dict_filters=N
             ret[i] = d
             i += 1
     return ret
+
+
+# Warning: Can't prune conv layers is they are followed by batchnorm!
+def soft_prune_model(model: nn.Module, activations: dict, layers=None):
+    if layers is None:
+        layers = activations.keys()
+    device = next(model.parameters()).device
+    for k in layers:
+        layer = model.get_submodule(k)
+        activation = activations[k]
+        mask = torch.all((activation == 0).view(activation.shape[0], -1), dim=-1)
+        with torch.no_grad():
+            layer.weight.masked_scatter_(
+                torch.repeat_interleave(mask, torch.tensor(layer.weight.shape[1:], device=device).prod()).view(layer.weight.shape),
+                torch.zeros(*layer.weight.shape, device=device)
+            )
+            layer.bias.masked_scatter_(
+                mask,
+                torch.zeros(*layer.weight.shape, device=device)
+            )
 
 
 # WIP!

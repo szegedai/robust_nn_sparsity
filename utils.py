@@ -199,11 +199,10 @@ def append_activations_to_log(log_file, checkpoint_dir, model, ds_loader, attack
     lm.write_all()
 
 
-def generate_activities(model, from_path, to_path, epoch_range, training_methods, attachments, ds_loader, device=None):
+def generate_activities(model, architecture, from_path, to_path, epoch_range, training_methods, attachments, ds_loader, device=None):
     if device is None:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
-    architecture = from_path.split('/')[-1]
     for training_method in training_methods:
         for attachment in attachments:
             for i in epoch_range:
@@ -241,12 +240,53 @@ class L1Regularization(Regularization):
         return sum(p.abs().sum() for p in self.model.parameters())
 
 
-class LbRegularization(Regularization):
-    def __init__(self, model_parameters, lb_lambda):
-        super(LbRegularization, self).__init__(model_parameters, lb_lambda)
+class L2MRegularization(Regularization):
+    def __init__(self, model_parameters, l2m_lambda):
+        super(L2MRegularization, self).__init__(model_parameters, l2m_lambda)
 
     def norm(self):
         return sum(((p + p.abs()) / 2).pow(2.0).sum() for p in self.model.parameters())
+
+
+class L1MRegularization(Regularization):
+    def __init__(self, model_parameters, l1m_lambda):
+        super(L1MRegularization, self).__init__(model_parameters, l1m_lambda)
+
+    def norm(self):
+        return sum(((p + p.abs()) / 2).sum() for p in self.model.parameters())
+
+
+class RollingStatistics:
+    def __init__(self, shape=(1,), axis=-1):
+        self.axis = axis
+        shape = list(shape)
+        del shape[axis]
+
+        self._count = 0
+        self._sum = np.zeros(shape)
+        self._sq_sum = np.zeros(shape)
+
+    def update(self, new_vals):
+        new_vals = np.array(new_vals)
+        self._sum += np.sum(new_vals, axis=self.axis)
+        self._sq_sum += np.sum(np.square(new_vals), axis=self.axis)
+        self._count += new_vals.shape[self.axis]
+
+    @property
+    def mean(self):
+        return self._sum / self._count
+
+    @property
+    def std(self):
+        return np.sqrt(self._sq_sum / self._count - np.square(self._sum / self._count))
+
+    @property
+    def var(self):
+        return self._sq_sum / self._count - np.square(self._sum / self._count)
+
+    @property
+    def count(self):
+        return self._count
 
 
 def create_data_loaders(datasets, batch_size, shuffle=True, num_workers=4):
