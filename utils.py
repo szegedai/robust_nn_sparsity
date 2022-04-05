@@ -212,48 +212,40 @@ def generate_activities(model, architecture, from_path, to_path, epoch_range, tr
                 save_data(std_activity, f'{to_path}/{training_method}_{architecture}{attachment}/{i}')
 
 
-class Regularization:
-    def __init__(self, model=None, lam=0.0):
+def l1_norm(x):
+    return x.abs()
+
+
+def l2_norm(x):
+    return x.pow(2.0)
+
+
+def l1m_norm(x):
+    return (x + x.abs()) / 2
+
+
+def l2m_norm(x):
+    return ((x + x.abs()) / 2).pow(2.0)
+
+
+class WeightRegularization:
+    def __init__(self, model=None, norm=lambda x: x, lam=0.0, lambda_map=None):
         self.model = model
         self.lam = lam
-
-    def norm(self):
-        return 0.0
+        self.lambda_map = lambda_map
+        self.norm = norm
 
     def __call__(self):
-        return self.norm() * self.lam
+        if self.lambda_map is not None:
+            s = 0.0
+            for layer_id, lam in self.lambda_map.items():
+                s += sum(self.norm(p).sum() for p in self.model.get_submodule(layer_id).parameters()) * lam
+            return s
+        return sum(self.norm(p).sum() for p in self.model.parameters()) * self.lam
 
 
-class L2Regularization(Regularization):
-    def __init__(self, model, l2_lambda):
-        super(L2Regularization, self).__init__(model, l2_lambda)
-
-    def norm(self):
-        return sum(p.pow(2.0).sum() for p in self.model.parameters())
-
-
-class L1Regularization(Regularization):
-    def __init__(self, model, l1_lambda):
-        super(L1Regularization, self).__init__(model, l1_lambda)
-
-    def norm(self):
-        return sum(p.abs().sum() for p in self.model.parameters())
-
-
-class L2MRegularization(Regularization):
-    def __init__(self, model_parameters, l2m_lambda):
-        super(L2MRegularization, self).__init__(model_parameters, l2m_lambda)
-
-    def norm(self):
-        return sum(((p + p.abs()) / 2).pow(2.0).sum() for p in self.model.parameters())
-
-
-class L1MRegularization(Regularization):
-    def __init__(self, model_parameters, l1m_lambda):
-        super(L1MRegularization, self).__init__(model_parameters, l1m_lambda)
-
-    def norm(self):
-        return sum(((p + p.abs()) / 2).sum() for p in self.model.parameters())
+class ActivityRegularization:
+    pass
 
 
 class RollingStatistics:
@@ -261,16 +253,22 @@ class RollingStatistics:
         self.axis = axis
         shape = list(shape)
         del shape[axis]
+        self.shape = shape
 
         self._count = 0
-        self._sum = np.zeros(shape)
-        self._sq_sum = np.zeros(shape)
+        self._sum = np.zeros(self.shape)
+        self._sq_sum = np.zeros(self.shape)
 
     def update(self, new_vals):
         new_vals = np.array(new_vals)
         self._sum += np.sum(new_vals, axis=self.axis)
         self._sq_sum += np.sum(np.square(new_vals), axis=self.axis)
         self._count += new_vals.shape[self.axis]
+
+    def reset(self):
+        self._count = 0
+        self._sum = np.zeros(self.shape)
+        self._sq_sum = np.zeros(self.shape)
 
     @property
     def mean(self):
@@ -289,10 +287,14 @@ class RollingStatistics:
         return self._count
 
 
-def create_data_loaders(datasets, batch_size, shuffle=True, num_workers=4):
+def create_data_loaders(datasets, batch_size, shuffle=True, num_workers=4, pin_memory=True):
     ds_loaders = []
     for ds in datasets:
-        ds_loaders.append(DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers))
+        ds_loaders.append(DataLoader(ds,
+                                     batch_size=batch_size,
+                                     shuffle=shuffle,
+                                     num_workers=num_workers,
+                                     pin_memory=pin_memory))
     return ds_loaders
 
 
@@ -356,6 +358,22 @@ def load_svhn():
     return train_dataset, test_dataset, combined_dataset
 
 
+# WIP!
+def load_imagenet():
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor()
+    ])
+    combined = []
+    train_dataset = torchvision.datasets.ImageNet('./datasets', split='train', transform=transform, download=True)
+    combined.append(train_dataset)
+    test_dataset = torchvision.datasets.ImageNet('./datasets', split='test', transform=transform, download=True)
+    combined.append(test_dataset)
+
+    combined_dataset = MultiDataset(*combined)
+
+    return train_dataset, test_dataset, combined_dataset
+
+
 def setup_mnist(batch_size=50):
     return create_data_loaders(load_mnist(), batch_size, True, 6)
 
@@ -370,3 +388,7 @@ def setup_cifar10(batch_size=128):
 
 def setup_svhn(batch_size=128):
     return create_data_loaders(load_svhn(), batch_size, True, 8)
+
+
+def setup_imagenet(batch_size=128):
+    return create_data_loaders(load_imagenet(), batch_size, True, 8)

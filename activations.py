@@ -206,7 +206,30 @@ def activity_distance(model, batch, activity_p, distance_fn=None, dict_filters=N
     return ret
 
 
-# Warning: Can't prune conv layers is they are followed by batchnorm!
+def get_active_decoy_neuron_ratios(model, batch, activity_p, extractor=None, dict_filters=None, device=None):
+    if device is None:
+        device = next(model.parameters()).device
+    if extractor is None:
+        extractor = ActivationExtractor(model, model.get_relevant_layers())
+    with torch.no_grad():
+        batch = batch.to(device)
+        if dict_filters is None:
+            activity_p = flatten_tdict(activity_p)
+            activations = split_tdict(extractor(batch))
+        else:
+            activity_p = flatten_tdict(filter_tdict(activity_p, dict_filters))
+            activations = split_tdict(filter_tdict(extractor(batch), dict_filters))
+
+        mask = activity_p == 0
+        ret = torch.empty(len(batch), device=device)
+        i = 0
+        for activation in activations:
+            ret[i] = torch.sum(torch.sign(flatten_tdict(activation)) * mask) / torch.count_nonzero(mask)
+            i += 1
+    return ret
+
+
+# Warning: Can't prune conv layers if they are followed by batchnorm!
 def soft_prune_model(model: nn.Module, activations: dict, layers=None):
     if layers is None:
         layers = activations.keys()

@@ -4,6 +4,12 @@ import torchvision
 import os
 
 
+def use_multiple_gpus(model, device, gpu_ids=None):
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model, device_ids=gpu_ids, output_device=device)
+    model.to(device)
+
+
 def save_checkpoint(model, optimizer, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save({
@@ -35,7 +41,7 @@ class VGG4(nn.Module):
     def __init__(self, input_shape, num_classes):
         super(VGG4, self).__init__()
         self.max_pool = nn.MaxPool2d((2, 2))
-        self.relu = nn.ReLU(inplace=True)  # This is important for the neuron activation checks!
+        self.relu = nn.ReLU(inplace=True)  # Inplace is important for the neuron activation checks!
 
         self.conv2d_0 = nn.Conv2d(input_shape[0], 32, (5, 5), padding='same')
         self.conv2d_1 = nn.Conv2d(32, 64, (5, 5), padding='same')
@@ -378,9 +384,46 @@ class ResNet18(torchvision.models.ResNet):
 
     @staticmethod
     def get_relevant_layers():
-        return ['body.bn1',
-                'body.layer1.0.bn1', 'body.layer1.0.bn2', 'body.layer1.1.bn1', 'body.layer1.1.bn2',
-                'body.layer2.0.bn1', 'body.layer2.0.bn2', 'body.layer2.1.bn1', 'body.layer2.1.bn2',
-                'body.layer3.0.bn1', 'body.layer3.0.bn2', 'body.layer3.1.bn1', 'body.layer3.1.bn2',
-                'body.layer4.0.bn1', 'body.layer4.0.bn2', 'body.layer4.1.bn1', 'body.layer4.1.bn2',
-                'body.fc']
+        return ['bn1',
+                'layer1.0.bn1', 'layer1.0.bn2', 'layer1.1.bn1', 'layer1.1.bn2',
+                'layer2.0.bn1', 'layer2.0.bn2', 'layer2.1.bn1', 'layer2.1.bn2',
+                'layer3.0.bn1', 'layer3.0.bn2', 'layer3.1.bn1', 'layer3.1.bn2',
+                'layer4.0.bn1', 'layer4.0.bn2', 'layer4.1.bn1', 'layer4.1.bn2']
+
+
+class ResNet34(torchvision.models.ResNet):
+    def __init__(self, num_classes, **kwargs):
+        super(ResNet34, self).__init__(
+            torchvision.models.resnet.BasicBlock,
+            [3, 4, 6, 3],
+            num_classes,
+            **kwargs
+        )
+
+    def forward(self, x):
+        return super(ResNet34, self).forward(x)
+
+    @staticmethod
+    def get_relevant_layers():
+        return []
+
+
+class ResNet50(torchvision.models.ResNet):
+    def __init__(self, num_classes, **kwargs):
+        super(ResNet50, self).__init__(
+            torchvision.models.resnet.Bottleneck,
+            [3, 4, 6, 3],
+            num_classes,
+            **kwargs
+        )
+
+    def forward(self, x):
+        return super(ResNet50, self).forward(x)
+
+    @staticmethod
+    def get_relevant_layers():
+        return ['bn1',
+                'layer1.0.bn3', 'layer1.1.bn3', 'layer1.2.bn3',
+                'layer2.0.bn3', 'layer2.1.bn3', 'layer2.2.bn3', 'layer2.3.bn3',
+                'layer3.0.bn3', 'layer3.1.bn3', 'layer3.2.bn3', 'layer3.3.bn3', 'layer3.4.bn3',
+                'layer4.0.bn3', 'layer4.1.bn3', 'layer4.2.bn3']
