@@ -93,13 +93,17 @@ class RemoteCheckpointCallback(Callback):
         self.ever_n_epochs = ever_n_epochs
         self._transport = paramiko.Transport((host, 22))
 
+    def on_training_begin(self):
+        self._transport.connect(username=self.username, password=self.password)
+
+    def on_training_end(self, metrics):
+        self._transport.close()
+
     def on_epoch_end(self, num_epochs, epoch_idx, metrics):
-        if not (epoch_idx + 1 % self.ever_n_epochs):
+        if not ((epoch_idx + 1) % self.ever_n_epochs):
             save_checkpoint(self.model, self.optimizer, f'{self.tmp_dir}/tmp_{epoch_idx + 1}')
-            self._transport.connect(username=self.username, password=self.password)
             with paramiko.SFTPClient.from_transport(self._transport) as sftp:
                 sftp.put(os.path.abspath(f'{self.tmp_dir}/tmp_{epoch_idx + 1}'), f'{self.remote_dir}/{epoch_idx + 1}')
-            self._transport.close()
             os.remove(f'{self.tmp_dir}/tmp_{epoch_idx + 1}')
 
 
