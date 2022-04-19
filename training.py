@@ -5,8 +5,9 @@ import os
 import paramiko
 from time import time
 from collections import deque
+
 from utils import evaluate, WeightRegularization, RollingStatistics, LogManager
-from models import save_checkpoint
+from models import save_checkpoint, freeze_layers, unfreeze_layers
 
 
 class Callback:
@@ -62,7 +63,7 @@ class CLILoggerCallback(Callback):
         return ret
 
 
-class LRSchedularCallback(Callback):
+class LRSchedulerCallback(Callback):
     def __init__(self, schedular):
         super().__init__()
         self.schedular = schedular
@@ -116,10 +117,23 @@ class FileLoggerCallback(Callback):
         self.log_manager.write_record(metrics)
 
 
+class LayerFreezerCallback(Callback):
+    def __init__(self, layers, use_complementer_layers=False):
+        super().__init__()
+        self.layers = layers
+        self.use_complementer_layers = use_complementer_layers
+
+    def on_epoch_begin(self, num_epochs, epoch_idx):
+        if self.use_complementer_layers:
+            freeze_layers(self.model)
+            unfreeze_layers(self.model, self.layers)
+        else:
+            freeze_layers(self.model, self.layers)
+
+
 def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=None,
               reg=lambda: 0.0, callbacks=None, num_epochs=1):
     device = next(model.parameters()).device
-    model.training = True
     callbacks = callbacks if callbacks is not None else []
     do_validation = val_loader is not None
     do_adv_validation = val_attack is not None
@@ -137,6 +151,7 @@ def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=Non
 
     iter_callbacks('on_training_begin')
     for epoch_idx in range(num_epochs):
+        model.train()
         metrics = {}
         running_loss.reset()
         running_acc.reset()
@@ -162,6 +177,7 @@ def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=Non
             metrics['std_train_acc'] = reduced_batch_accs
             iter_callbacks('on_batch_end', num_batches, batch_idx, metrics)
         if do_validation:
+            model.eval()
             if do_adv_validation:
                 val_loss, val_acc = evaluate(model, loss_fn, val_loader, val_attack)
                 metrics['adv_val_loss'] = val_loss
@@ -173,7 +189,7 @@ def train_std(model, loss_fn, opt, train_loader, val_loader=None, val_attack=Non
             #iter_callbacks('on_std_validation', metrics)
         iter_callbacks('on_epoch_end', num_epochs, epoch_idx, metrics)
     iter_callbacks('on_training_end', metrics)
-    model.training = False
+    model.eval()
     return metrics
 
 

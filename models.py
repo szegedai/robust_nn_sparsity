@@ -18,9 +18,11 @@ def save_checkpoint(model, optimizer, path):
     }, path)
 
 
-def load_checkpoint(model, optimizer, path):
-    checkpoint = torch.load(path)
+def load_checkpoint(model, optimizer, path, target_device=None):
+    checkpoint = torch.load(path, target_device)
     model.load_state_dict(checkpoint['model_state'])
+    if target_device is not None:
+        model.to(target_device)
     optimizer.load_state_dict(checkpoint['optimizer_state'])
 
 
@@ -29,12 +31,29 @@ def save_model(model, path):
     torch.save({'model_state': model.state_dict()}, path)
 
 
-def load_model(model, path):
-    model.load_state_dict(torch.load(path)['model_state'])
+def load_model(model, path, target_device=None):
+    model.load_state_dict(torch.load(path, target_device)['model_state'])
+    if target_device is not None:
+        model.to(target_device)
 
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def freeze_layers(model: nn.Module, layers=None):
+    for layer_name, layer in model.named_modules():
+        if layers is None or layer_name in layers:
+            layer.eval()
+            for p in layer.parameters():
+                p.requires_grad = False
+
+
+def unfreeze_layers(model: nn.Module, layers=None):
+    for layer_name, layer in model.named_modules():
+        if layers is None or layer_name in layers:
+            for p in layer.parameters():
+                p.requires_grad = True
 
 
 class VGG4(nn.Module):

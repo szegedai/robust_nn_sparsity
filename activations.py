@@ -175,6 +175,10 @@ def filter_tdict(d, filters):
     return ret
 
 
+def remap_tdict(d, remap):
+    return {new_key: d[old_key] for old_key, new_key in remap.items()}
+
+
 def activity_distance(model, batch, activity_p, distance_fn=None, dict_filters=None, use_sign=False, device=None):
     if use_sign:
         pre_d_fn = torch.sign
@@ -229,7 +233,7 @@ def get_active_decoy_neuron_ratios(model, batch, activity_p, extractor=None, dic
     return ret
 
 
-# Warning: Can't prune conv layers if they are followed by batchnorm!
+# Warning: If conv layer is followed by batchnorm, then activation tdict remapping is required!
 def soft_prune_model(model: nn.Module, activations: dict, layers=None):
     if layers is None:
         layers = activations.keys()

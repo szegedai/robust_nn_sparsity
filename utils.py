@@ -14,8 +14,11 @@ def save_data(data, path):
     torch.save(data, path)
 
 
-def load_data(path):
-    return torch.load(path)
+def load_data(path, target_device=None):
+    data = torch.load(path, target_device)
+    if target_device is not None:
+        data.to(target_device)
+    return data
 
 
 def split_dataset(dataset, split=0.1, seed=42):
@@ -298,7 +301,7 @@ def create_data_loaders(datasets, batch_size, shuffle=True, num_workers=4, pin_m
     return ds_loaders
 
 
-def load_mnist():
+def load_mnist(transforms=None):
     transform = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor()
     ])
@@ -313,9 +316,11 @@ def load_mnist():
     return train_dataset, test_dataset, combined_dataset
 
 
-def load_fashion_mnist():
+def load_fashion_mnist(transforms=None):
+    if transforms is None:
+        transforms = []
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor()
+        torchvision.transforms.ToTensor(), *transforms
     ])
     combined = []
     train_dataset = torchvision.datasets.FashionMNIST('./datasets', train=True, transform=transform, download=True)
@@ -328,9 +333,11 @@ def load_fashion_mnist():
     return train_dataset, test_dataset, combined_dataset
 
 
-def load_cifar10():
+def load_cifar10(transforms=None):
+    if transforms is None:
+        transforms = []
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor()
+        torchvision.transforms.ToTensor(), *transforms
     ])
     combined = []
     train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=transform, download=True)
@@ -343,9 +350,11 @@ def load_cifar10():
     return train_dataset, test_dataset, combined_dataset
 
 
-def load_svhn():
+def load_svhn(transforms=None):
+    if transforms is None:
+        transforms = []
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor()
+        torchvision.transforms.ToTensor(), *transforms
     ])
     combined = []
     train_dataset = torchvision.datasets.SVHN('./datasets', split='train', transform=transform, download=True)
@@ -359,9 +368,11 @@ def load_svhn():
 
 
 # WIP!
-def load_imagenet():
+def load_imagenet(transforms=None):
+    if transforms is None:
+        transforms = []
     transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor()
+        torchvision.transforms.ToTensor(), *transforms
     ])
     combined = []
     train_dataset = torchvision.datasets.ImageNet('./datasets', split='train', transform=transform, download=True)
@@ -374,21 +385,21 @@ def load_imagenet():
     return train_dataset, test_dataset, combined_dataset
 
 
-def setup_mnist(batch_size=50):
-    return create_data_loaders(load_mnist(), batch_size, True, 6)
+def setup_mnist(batch_size=50, transforms=None):
+    return create_data_loaders(load_mnist(transforms), batch_size, True, 6)
 
 
-def setup_fashion_mnist(batch_size=50):
-    return create_data_loaders(load_fashion_mnist(), batch_size, True, 6)
+def setup_fashion_mnist(batch_size=50, transforms=None):
+    return create_data_loaders(load_fashion_mnist(transforms), batch_size, True, 6)
 
 
-def setup_cifar10(batch_size=128):
-    return create_data_loaders(load_cifar10(), batch_size, True, 8)
+def setup_cifar10(batch_size=128, transforms=None):
+    return create_data_loaders(load_cifar10(transforms), batch_size, True, 8)
 
 
-def setup_svhn(batch_size=128):
-    return create_data_loaders(load_svhn(), batch_size, True, 8)
+def setup_svhn(batch_size=128, transforms=None):
+    return create_data_loaders(load_svhn(transforms), batch_size, True, 8)
 
 
-def setup_imagenet(batch_size=128):
-    return create_data_loaders(load_imagenet(), batch_size, True, 8)
+def setup_imagenet(batch_size=128, transforms=None):
+    return create_data_loaders(load_imagenet(transforms), batch_size, True, 8)
