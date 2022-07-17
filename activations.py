@@ -175,6 +175,13 @@ def filter_tdict(d, filters):
     return ret
 
 
+def transform_tdict(fn, d, *args, **kwargs):
+    ret = {}
+    for k, v in d.items():
+        ret[k] = fn(v, *args, **kwargs)
+    return ret
+
+
 def remap_tdict(d, remap):
     return {new_key: d[old_key] for old_key, new_key in remap.items()}
 

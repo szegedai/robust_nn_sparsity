@@ -6,7 +6,7 @@ import os
 from torch.utils.data import DataLoader
 from intervaltree import IntervalTree
 from models import load_model
-from activations import get_max_activations, get_inactivity_ratio, get_activity
+from activations import get_max_activations, get_inactivity_ratio, get_activity, ActivationExtractor
 
 
 def save_data(data, path):
@@ -40,7 +40,7 @@ def evaluate(model, loss_fn, ds_loader, attack=None):
         x, y = x.to(model_device), y.to(model_device)
 
         if attack is not None:
-            x = attack(x, y)
+            x = attack.perturb(x, y)
         with torch.no_grad():
             output = model(x)
 
@@ -250,7 +250,54 @@ class WeightRegularization:
 
 
 class ActivityRegularization:
-    pass
+    def __init__(self, extractor=None, norm=lambda x: x, lam=0.0, lambda_map=None, mask_map=None):
+        self.extractor = extractor
+        self.lam = lam
+        self.lambda_map = lambda_map
+        self.norm = norm
+        self.mask_map = mask_map
+
+    def __call__(self):
+        activations = self.extractor.activations
+        if self.lambda_map is not None:
+            s = 0.0
+            for layer_id, lam in self.lambda_map.items():
+                if self.mask_map is not None:
+                    s += self.norm(activations[layer_id] * self.mask_map[layer_id]).sum() * lam
+                else:
+                    s += self.norm(activations[layer_id]).sum() * lam
+            return s
+        if self.mask_map is not None:
+            s = 0.0
+            for layer_id, mask in self.mask_map.items():
+                s += self.norm(activations[layer_id] * self.mask_map[layer_id]).sum() * self.lam
+            return s
+        return sum(self.norm(a).sum() for a in activations.values()) * self.lam
+
+
+# WIP!
+class GradientRegularization:
+    def __init__(self, model, loss_fn, lam=1.0):
+        self.latest_loss = None
+        self.latest_input = None
+        def loss_setter(_, __, l):
+            self.latest_loss = l
+        def input_setter(_, input):
+            self.latest_input = input[0]
+            if self.latest_input.is_leaf:
+                self.latest_input.requires_grad = True
+        self.loss_hook = loss_fn.register_forward_hook(loss_setter)
+        self.input_hook = model.register_forward_pre_hook(input_setter)
+        self.lam = lam
+
+    def __call__(self):
+        return self.lam * torch.autograd.grad(self.latest_loss, self.latest_input,
+                                              grad_outputs=None, only_inputs=True,
+                                              create_graph=True, retain_graph=True)[0].abs().sum()
+
+    def __del__(self):
+        self.loss_hook.remove()
+        self.input_hook.remove()
 
 
 class RollingStatistics:
