@@ -4,12 +4,6 @@ import torchvision
 import os
 
 
-def use_multiple_gpus(model, device, gpu_ids=None):
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model, device_ids=gpu_ids, output_device=device)
-    model.to(device)
-
-
 def save_checkpoint(model, optimizer, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save({
@@ -352,6 +346,7 @@ class ResNet18(torchvision.models.ResNet):
     def forward(self, x):
         return super(ResNet18, self).forward(x)
 
+    # TODO: Add block outputs to relevant layers!
     @staticmethod
     def get_relevant_layers():
         return ['bn1',
@@ -373,6 +368,7 @@ class ResNet34(torchvision.models.ResNet):
     def forward(self, x):
         return super(ResNet34, self).forward(x)
 
+    # TODO: Add block outputs to relevant layers!
     @staticmethod
     def get_relevant_layers():
         return ['bn1',
@@ -394,6 +390,7 @@ class ResNet50(torchvision.models.ResNet):
     def forward(self, x):
         return super(ResNet50, self).forward(x)
 
+    # TODO: Add block outputs to relevant layers!
     @staticmethod
     def get_relevant_layers():
         return ['bn1',

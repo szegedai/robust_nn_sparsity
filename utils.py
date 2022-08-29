@@ -3,10 +3,22 @@ import torchvision
 import numpy as np
 import json
 import os
+import random
 from torch.utils.data import DataLoader
 from intervaltree import IntervalTree
 from models import load_model
 from activations import get_max_activations, get_inactivity_ratio, get_activity, ActivationExtractor
+from autoattack import AutoAttack
+from torch.nn.functional import cross_entropy, log_softmax, one_hot
+
+
+def set_determinism(determinism=True, seed=None):
+    if seed is not None:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+    torch.backends.cudnn.deterministic = determinism
 
 
 def save_data(data, path):
@@ -32,11 +44,30 @@ def split_dataset(dataset, split=0.1, seed=42):
     )
 
 
-def evaluate(model, loss_fn, ds_loader, attack=None):
+def entropy(t, dim=()):
+    return -(t * torch.log(t)).sum(dim=dim)
+
+
+def quantize(t, decimals, dtype=torch.uint8):
+    return (t.detach() * 10 ** decimals).to(dtype=dtype)
+
+
+def top1_accuracy(one_hot=False):
+    if one_hot:
+        return lambda y_hat, y: torch.argmax(y_hat.detach(), dim=1).cpu().numpy() == torch.argmax(y.detach(), dim=1).cpu().numpy()
+    return lambda y_hat, y: torch.argmax(y_hat.detach(), dim=1).cpu().numpy() == y.detach().cpu().numpy()
+
+
+def evaluate(model, ds_loader, loss_fn, acc_fn=top1_accuracy(False), attack=None, batch_num_limit=float('inf')):
     model_device = next(model.parameters()).device
     loss_sum = 0
     acc_sum = 0
+    num_samples = 0
     for i, (x, y) in enumerate(ds_loader):
+        if i >= batch_num_limit:
+            break
+        current_batch_size = x.shape[0]
+        num_samples += current_batch_size
         x, y = x.to(model_device), y.to(model_device)
 
         if attack is not None:
@@ -47,8 +78,71 @@ def evaluate(model, loss_fn, ds_loader, attack=None):
             loss = loss_fn(output, y)
 
         loss_sum += loss.item()
-        acc_sum += np.mean(torch.argmax(output, dim=1).detach().cpu().numpy() == y.detach().cpu().numpy())
-    return loss_sum / (i + 1), acc_sum / (i + 1)
+        '''if y.shape == output.shape:
+            batch_acc = torch.argmax(output.detach(), dim=1).cpu().numpy() == torch.argmax(y.detach(), dim=1).cpu().numpy()
+        else:
+            batch_acc = torch.argmax(output.detach(), dim=1).cpu().numpy() == y.detach().cpu().numpy()'''
+        batch_acc = acc_fn(output, y)
+        acc_sum += np.sum(batch_acc)
+    return loss_sum / num_samples, acc_sum / num_samples
+
+
+def evaluate_acc(model, ds_loader, acc_fn=top1_accuracy(False), attack=None, batch_num_limit=float('inf')):
+    autoattack = isinstance(attack, AutoAttack)
+    model_device = next(model.parameters()).device
+    acc_sum = 0
+    num_samples = 0
+    for i, (x, y) in enumerate(ds_loader):
+        if i >= batch_num_limit:
+            break
+        current_batch_size = x.shape[0]
+        num_samples += current_batch_size
+        x, y = x.to(model_device), y.to(model_device)
+
+        if attack is not None:
+            if autoattack:
+                x = attack.run_standard_evaluation(x, y, bs=current_batch_size)
+            else:
+                x = attack.perturb(x, y)
+        with torch.no_grad():
+            output = model(x)
+
+        '''if y.shape == output.shape:
+            batch_acc = torch.argmax(output.detach(), dim=1).cpu().numpy() == torch.argmax(y.detach(), dim=1).cpu().numpy()
+        else:
+            batch_acc = torch.argmax(output.detach(), dim=1).cpu().numpy() == y.detach().cpu().numpy()'''
+        batch_acc = acc_fn(output, y)
+        acc_sum += np.sum(batch_acc)
+    return acc_sum / num_samples
+
+
+class CrossEntropyLoss(torch.nn.Module):
+    def __init__(self, reduction_fn=torch.mean, one_hot=False, **kwargs):
+        super().__init__()
+        if reduction_fn is not None:
+            self.reduce = reduction_fn
+        else:
+            self.reduce = lambda x: x
+        if one_hot:
+            self.forward = self._forward_impl_1
+        else:
+            self.forward = self._forward_impl_2
+        self._cross_entropy_kwargs = kwargs
+
+    def _forward_impl_1(self, y_hat, y):
+        return self.reduce(-torch.sum(y * log_softmax(y_hat), dim=1))
+
+    def _forward_impl_2(self, y_hat, y):
+        return cross_entropy(y_hat, y, **self._cross_entropy_kwargs)
+
+
+class OneHotEncoder:
+    def __init__(self, num_classes, dtype=torch.int64):
+        self.num_classes = num_classes
+        self.dtype = dtype
+
+    def __call__(self, x):
+        return one_hot(torch.tensor(x, dtype=torch.int64), self.num_classes).to(dtype=self.dtype)
 
 
 class MultiDataset(torch.utils.data.Dataset):
@@ -350,7 +444,7 @@ def create_data_loaders(datasets, batch_size, shuffle=True, num_workers=4, pin_m
     return ds_loaders
 
 
-def load_mnist(train_transforms=None, test_transforms=None):
+def load_mnist(train_transforms=None, test_transforms=None, target_transform=None):
     if train_transforms is None:
         train_transforms = []
     train_transforms = torchvision.transforms.Compose([
@@ -362,7 +456,11 @@ def load_mnist(train_transforms=None, test_transforms=None):
         torchvision.transforms.ToTensor(), *test_transforms
     ])
     combined = []
-    train_dataset = torchvision.datasets.MNIST('./datasets', train=True, transform=train_transforms, download=True)
+    train_dataset = torchvision.datasets.MNIST('./datasets',
+                                               train=True,
+                                               transform=train_transforms,
+                                               target_transform=target_transform,
+                                               download=True)
     combined.append(train_dataset)
     test_dataset = torchvision.datasets.MNIST('./datasets', train=False, transform=test_transforms, download=True)
     combined.append(test_dataset)
@@ -372,7 +470,7 @@ def load_mnist(train_transforms=None, test_transforms=None):
     return train_dataset, test_dataset, combined_dataset
 
 
-def load_fashion_mnist(train_transforms=None, test_transforms=None):
+def load_fashion_mnist(train_transforms=None, test_transforms=None, target_transform=None):
     if train_transforms is None:
         train_transforms = []
     train_transforms = torchvision.transforms.Compose([
@@ -384,9 +482,17 @@ def load_fashion_mnist(train_transforms=None, test_transforms=None):
         torchvision.transforms.ToTensor(), *test_transforms
     ])
     combined = []
-    train_dataset = torchvision.datasets.FashionMNIST('./datasets', train=True, transform=train_transforms, download=True)
+    train_dataset = torchvision.datasets.FashionMNIST('./datasets',
+                                                      train=True,
+                                                      transform=train_transforms,
+                                                      target_transform=target_transform,
+                                                      download=True)
     combined.append(train_dataset)
-    test_dataset = torchvision.datasets.FashionMNIST('./datasets', train=False, transform=test_transforms, download=True)
+    test_dataset = torchvision.datasets.FashionMNIST('./datasets',
+                                                     train=False,
+                                                     transform=test_transforms,
+                                                     target_transform=target_transform,
+                                                     download=True)
     combined.append(test_dataset)
 
     combined_dataset = MultiDataset(*combined)
@@ -394,7 +500,7 @@ def load_fashion_mnist(train_transforms=None, test_transforms=None):
     return train_dataset, test_dataset, combined_dataset
 
 
-def load_cifar10(train_transforms=None, test_transforms=None):
+def load_cifar10(train_transforms=None, test_transforms=None, target_transform=None):
     if train_transforms is None:
         train_transforms = []
     train_transforms = torchvision.transforms.Compose([
@@ -406,9 +512,17 @@ def load_cifar10(train_transforms=None, test_transforms=None):
         torchvision.transforms.ToTensor(), *test_transforms
     ])
     combined = []
-    train_dataset = torchvision.datasets.CIFAR10('./datasets', train=True, transform=train_transforms, download=True)
+    train_dataset = torchvision.datasets.CIFAR10('./datasets',
+                                                 train=True,
+                                                 transform=train_transforms,
+                                                 target_transform=target_transform,
+                                                 download=True)
     combined.append(train_dataset)
-    test_dataset = torchvision.datasets.CIFAR10('./datasets', train=False, transform=test_transforms, download=True)
+    test_dataset = torchvision.datasets.CIFAR10('./datasets',
+                                                train=False,
+                                                transform=test_transforms,
+                                                target_transform=target_transform,
+                                                download=True)
     combined.append(test_dataset)
 
     combined_dataset = MultiDataset(*combined)
@@ -416,7 +530,7 @@ def load_cifar10(train_transforms=None, test_transforms=None):
     return train_dataset, test_dataset, combined_dataset
 
 
-def load_svhn(train_transforms=None, test_transforms=None):
+def load_svhn(train_transforms=None, test_transforms=None, target_transform=None):
     if train_transforms is None:
         train_transforms = []
     train_transforms = torchvision.transforms.Compose([
@@ -428,9 +542,16 @@ def load_svhn(train_transforms=None, test_transforms=None):
         torchvision.transforms.ToTensor(), *test_transforms
     ])
     combined = []
-    train_dataset = torchvision.datasets.SVHN('./datasets', split='train', transform=train_transforms, download=True)
+    train_dataset = torchvision.datasets.SVHN('./datasets',
+                                              split='train',
+                                              transform=train_transforms,
+                                              download=True)
     combined.append(train_dataset)
-    test_dataset = torchvision.datasets.SVHN('./datasets', split='test', transform=test_transforms, download=True)
+    test_dataset = torchvision.datasets.SVHN('./datasets',
+                                             split='test',
+                                             transform=test_transforms,
+                                             target_transform=target_transform,
+                                             download=True)
     combined.append(test_dataset)
 
     combined_dataset = MultiDataset(*combined)
@@ -438,7 +559,7 @@ def load_svhn(train_transforms=None, test_transforms=None):
     return train_dataset, test_dataset, combined_dataset
 
 
-def load_imagenet(train_transforms=None, test_transforms=None):
+def load_imagenet(train_transforms=None, test_transforms=None, target_transform=None):
     if train_transforms is None:
         train_transforms = []
     train_transforms = torchvision.transforms.Compose([
@@ -450,9 +571,13 @@ def load_imagenet(train_transforms=None, test_transforms=None):
         torchvision.transforms.ToTensor(), *test_transforms
     ])
     combined = []
-    train_dataset = torchvision.datasets.ImageFolder('./datasets/imagenet/training_data', transform=train_transforms)
+    train_dataset = torchvision.datasets.ImageFolder('./datasets/imagenet/training_data',
+                                                     transform=train_transforms,
+                                                     target_transform=target_transform)
     combined.append(train_dataset)
-    test_dataset = torchvision.datasets.ImageFolder('./datasets/imagenet/validation_data', transform=test_transforms)
+    test_dataset = torchvision.datasets.ImageFolder('./datasets/imagenet/validation_data',
+                                                    transform=test_transforms,
+                                                    target_transform=target_transform)
     combined.append(test_dataset)
 
     combined_dataset = MultiDataset(*combined)
@@ -461,20 +586,20 @@ def load_imagenet(train_transforms=None, test_transforms=None):
 
 
 def setup_mnist(batch_size=50, *args, **kwargs):
-    return create_data_loaders(load_mnist(*args, **kwargs), batch_size, True, 8)
+    return create_data_loaders(load_mnist(*args, **kwargs), batch_size, True, 4)
 
 
 def setup_fashion_mnist(batch_size=50, *args, **kwargs):
-    return create_data_loaders(load_fashion_mnist(*args, **kwargs), batch_size, True, 8)
+    return create_data_loaders(load_fashion_mnist(*args, **kwargs), batch_size, True, 4)
 
 
 def setup_cifar10(batch_size=256, *args, **kwargs):
-    return create_data_loaders(load_cifar10(*args, **kwargs), batch_size, True, 8)
+    return create_data_loaders(load_cifar10(*args, **kwargs), batch_size, True, 4)
 
 
 def setup_svhn(batch_size=256, *args, **kwargs):
-    return create_data_loaders(load_svhn(*args, **kwargs), batch_size, True, 8)
+    return create_data_loaders(load_svhn(*args, **kwargs), batch_size, True, 4)
 
 
 def setup_imagenet(batch_size=256, *args, **kwargs):
-    return create_data_loaders(load_imagenet(*args, **kwargs), batch_size, True, 8)
+    return create_data_loaders(load_imagenet(*args, **kwargs), batch_size, True, 4)
