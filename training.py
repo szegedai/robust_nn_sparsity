@@ -1,11 +1,9 @@
 import torch
-import numpy as np
 import sys
 import os
 import paramiko
 import wandb
 from time import time
-from collections import deque
 from torch.utils.data import DataLoader
 
 

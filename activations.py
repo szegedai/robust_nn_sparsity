@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+import models.resnet
 
 '''def split_dict(d: dict):
     return d.keys(), torch.stack(list(d.values()))
@@ -10,27 +11,36 @@ def create_dict(k, v: torch.Tensor):
     return dict(zip(k, torch.unbind(v)))'''
 
 
+def get_relevant_modules(model: nn.Module):
+    module_ids = []
+    prev_id = None
+    for m_id, m in model.named_modules():
+        if isinstance(m, nn.ReLU) and m.inplace and prev_id is not None:
+            module_ids.append(prev_id)
+        if isinstance(m, models.resnet.BasicBlock) or isinstance(m, models.resnet.FixupBasicBlock):
+            module_ids.append(m_id)
+        prev_id = m_id
+    return module_ids
+
+
 class ActivationExtractor(nn.Module):
-    def __init__(self, model: nn.Module, layers=None):
+    def __init__(self, model: nn.Module, module_ids=None):
         super().__init__()
         self.model = model
-        if layers is None:
-            self.layers = []
-            for n, _ in model.named_modules():
-                self.layers.append(n)
-        else:
-            self.layers = layers
-        self.activations = {layer: torch.empty(0) for layer in self.layers}
+        if module_ids is None:
+            module_ids = get_relevant_modules(model)
+        self.module_ids = module_ids
+        self.activations = {m_id: torch.empty(0) for m_id in self.module_ids}
 
         self.hooks = []
 
-        for layer_id in self.layers:
-            layer = dict([*self.model.named_modules()])[layer_id]
-            self.hooks.append(layer.register_forward_hook(self.get_activation_hook(layer_id)))
+        for m_id in self.module_ids:
+            layer = dict([*self.model.named_modules()])[m_id]
+            self.hooks.append(layer.register_forward_hook(self.get_activation_hook(m_id)))
 
-    def get_activation_hook(self, layer_id: str):
+    def get_activation_hook(self, m_id: str):
         def fn(_, __, output):
-            self.activations[layer_id] = output
+            self.activations[m_id] = output
 
         return fn
 
@@ -184,99 +194,3 @@ def transform_tdict(fn, d, *args, **kwargs):
 
 def remap_tdict(d, remap):
     return {new_key: d[old_key] for old_key, new_key in remap.items()}
-
-
-def activity_distance(model, batch, activity_p, distance_fn=None, dict_filters=None, use_sign=False, device=None):
-    if use_sign:
-        pre_d_fn = torch.sign
-    else:
-        pre_d_fn = lambda x: x
-    if device is None:
-        device = next(model.parameters()).device
-    if distance_fn is None:
-        #distance_fn = lambda p, q: torch.mean(torch.abs(p - q), dim=0)
-        def filtered_MAE(p, q):
-            mask = activity_p == 0
-            return torch.sum(torch.abs(p - q) * mask) / torch.count_nonzero(mask)
-        distance_fn = filtered_MAE
-    with torch.no_grad():
-        extractor = ActivationExtractor(model, model.get_relevant_layers())
-        if dict_filters is None:
-            activity_p = flatten_tdict(activity_p)
-            activations = split_tdict(extractor(batch))
-        else:
-            activity_p = flatten_tdict(filter_tdict(activity_p, dict_filters))
-            activations = split_tdict(filter_tdict(extractor(batch), dict_filters))
-
-        ret = torch.empty(len(batch), device=device)
-        i = 0
-        for activation in activations:
-            d = distance_fn(activity_p, pre_d_fn(flatten_tdict(activation)))
-            ret[i] = d
-            i += 1
-    return ret
-
-
-def get_active_decoy_neuron_ratios(model, batch, activity_p, extractor=None, dict_filters=None, device=None):
-    if device is None:
-        device = next(model.parameters()).device
-    if extractor is None:
-        extractor = ActivationExtractor(model, model.get_relevant_layers())
-    with torch.no_grad():
-        batch = batch.to(device)
-        if dict_filters is None:
-            activity_p = flatten_tdict(activity_p)
-            activations = split_tdict(extractor(batch))
-        else:
-            activity_p = flatten_tdict(filter_tdict(activity_p, dict_filters))
-            activations = split_tdict(filter_tdict(extractor(batch), dict_filters))
-
-        mask = activity_p == 0
-        ret = torch.empty(len(batch), device=device)
-        i = 0
-        for activation in activations:
-            ret[i] = torch.sum(torch.sign(flatten_tdict(activation)) * mask) / torch.count_nonzero(mask)
-            i += 1
-    return ret
-
-
-# Warning: If conv layer is followed by batchnorm, then activation tdict remapping is required!
-def soft_prune_model(model: nn.Module, activations: dict, layers=None):
-    if layers is None:
-        layers = activations.keys()
-    device = next(model.parameters()).device
-    for k in layers:
-        layer = model.get_submodule(k)
-        activation = activations[k]
-        mask = torch.all((activation == 0).view(activation.shape[0], -1), dim=-1)
-        with torch.no_grad():
-            layer.weight.masked_scatter_(
-                torch.repeat_interleave(mask, torch.tensor(layer.weight.shape[1:], device=device).prod()).view(layer.weight.shape),
-                torch.zeros(*layer.weight.shape, device=device)
-            )
-            layer.bias.masked_scatter_(
-                mask,
-                torch.zeros(*layer.weight.shape, device=device)
-            )
-
-
-# WIP!
-def reinitialize_inactive_neuron_weights(model: nn.Module, activations: dict, layers=None, ration=1.0):
-    if layers is None:
-        layers = activations.keys()
-    device = next(model.parameters()).device
-    for k in layers:
-        layer = model.get_submodule(k)
-        activation = activations[k]
-        w_std_mean = torch.std_mean(layer.weight.detach())
-        b_std_mean = torch.std_mean(layer.bias.detach())
-        mask = torch.all((activation == 0).view(activation.shape[0], -1), dim=-1)
-        with torch.no_grad():
-            layer.weight.masked_scatter_(
-                torch.repeat_interleave(mask, torch.tensor(layer.weight.shape[1:], device=device).prod()).view(layer.weight.shape),
-                torch.normal(w_std_mean[1].item(), w_std_mean[0].item(), layer.weight.shape, device=device)
-            )
-            layer.bias.masked_scatter_(
-                mask,
-                torch.normal(b_std_mean[1].item(), b_std_mean[0].item(), layer.bias.shape, device=device)
-            )

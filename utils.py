@@ -202,6 +202,77 @@ class NormalRandomDataset(torch.utils.data.Dataset):
         return torch.empty(self.data_shape).normal_(mean=self.mean, std=self.std).clamp_(*self.bounds)
 
 
+class ModelActivationDataset(torch.utils.data.IterableDataset):
+    def __init__(self, model, dataloader):
+        super().__init__()
+        self._model = model
+        self._model_device = next(model.parameters()).device
+        self._extractor = ActivationExtractor(self._model, self._model.get_relevant_layers())
+        self._dl = dataloader
+        self._dl_iter = None
+        self._len = len(dataloader)
+
+    def __iter__(self):
+        self._dl_iter = iter(self._dl)
+        return self
+
+    def __next__(self):
+        next_batch = next(self._dl_iter)
+        if not next_batch:
+            raise StopIteration
+        self._model(next_batch[0].to(self._model_device))
+        return self._extractor.activations
+
+    def __len__(self):
+        return self._len
+
+
+class TripletCIFAR10(torch.utils.data.IterableDataset):
+    def __init__(self, root='./datasets', split='train', transforms=None, get_labels=False):
+        if transforms is None:
+            transforms = []
+        transforms = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(), *transforms
+        ])
+        _cifar10 = None
+        if split == 'train':
+            _cifar10 = torchvision.datasets.CIFAR10(root, train=True, transform=transforms, download=True)
+        elif split == 'test':
+            _cifar10 = torchvision.datasets.CIFAR10(root, train=False, transform=transforms, download=True)
+        else:
+            raise Exception('Split must be "train" or "test"')
+        self._len = len(_cifar10)
+        self._data_by_labels = {}
+        for x, y in _cifar10:
+            if not (y in self._data_by_labels):
+                self._data_by_labels[y] = []
+            self._data_by_labels[y].append(x)
+        self._labels = set(self._data_by_labels.keys())
+        self._get_labels = get_labels
+
+    def __iter__(self):
+        self._iteration_counter = 0
+        return self
+
+    def __next__(self):
+        if self._iteration_counter >= self._len:
+            raise StopIteration
+        self._iteration_counter += 1
+        a_label = random.choice(tuple(self._labels))
+        n_label = random.choice(tuple(self._labels - {a_label}))
+        if self._get_labels:
+            return random.choice(self._data_by_labels[a_label]), \
+                   random.choice(self._data_by_labels[a_label]), \
+                   random.choice(self._data_by_labels[n_label]), \
+                   a_label, a_label, n_label
+        return random.choice(self._data_by_labels[a_label]), \
+               random.choice(self._data_by_labels[a_label]), \
+               random.choice(self._data_by_labels[n_label])
+
+    def __len__(self):
+        return self._len
+
+
 class LogManager:
     def __init__(self, to_file=None, from_file=None):
         self.file = to_file
@@ -249,68 +320,6 @@ class LogManager:
         return ret
 
 
-def append_activations_to_log(log_file, checkpoint_dir, model, ds_loader, attack=None, epoch_interval=None, sampling=1, force=False):
-    # epoch_interval tuple inclusion: [first, last)
-    lm = LogManager(from_file=log_file)
-
-    check_std_activations = force or not lm.has_col('std_inactivity_ratio')
-    check_adv_activations = (force or not lm.has_col('adv_inactivity_ratio')) and attack is not None
-    if not check_std_activations and not check_adv_activations:
-        return
-
-    if epoch_interval is None:
-        epoch_interval = (1, len(lm.records) + 1)
-
-    std_inactivity_ratio = np.array([])
-    adv_inactivity_ratio = np.array([])
-    for i in range(*epoch_interval):
-        if i % sampling == 0:
-            load_model(model, f'{checkpoint_dir}/{i}')
-            if check_std_activations:
-                #lm.records[i - 1]['std_inactivity_ratio'] = get_inactivity_ratio(get_max_activations(model, model.get_relevant_layers(), ds_loader))
-                std_inactivity_ratio = np.append(std_inactivity_ratio, get_inactivity_ratio(get_max_activations(model, model.get_relevant_layers(), ds_loader)))
-            if check_adv_activations:
-                #lm.records[i - 1]['adv_inactivity_ratio'] = get_inactivity_ratio(get_max_activations(model, model.get_relevant_layers(), ds_loader, attack))
-                adv_inactivity_ratio = np.append(adv_inactivity_ratio, get_inactivity_ratio(get_max_activations(model, model.get_relevant_layers(), ds_loader, attack)))
-        else:
-            if check_std_activations:
-                std_inactivity_ratio = np.append(std_inactivity_ratio, np.nan)
-            if check_adv_activations:
-                adv_inactivity_ratio = np.append(adv_inactivity_ratio, np.nan)
-
-    if check_std_activations:
-        xp = (~np.isnan(std_inactivity_ratio)).ravel().nonzero()[0]
-        fp = std_inactivity_ratio[~np.isnan(std_inactivity_ratio)]
-        x = np.isnan(std_inactivity_ratio).ravel().nonzero()[0]
-        std_inactivity_ratio[np.isnan(std_inactivity_ratio)] = np.interp(x, xp, fp)
-    if check_adv_activations:
-        xp = (~np.isnan(adv_inactivity_ratio)).ravel().nonzero()[0]
-        fp = adv_inactivity_ratio[~np.isnan(adv_inactivity_ratio)]
-        x = np.isnan(adv_inactivity_ratio).ravel().nonzero()[0]
-        adv_inactivity_ratio[np.isnan(adv_inactivity_ratio)] = np.interp(x, xp, fp)
-
-    for i in range(*epoch_interval):
-        if check_std_activations:
-            lm.records[i - 1]['std_inactivity_ratio'] = std_inactivity_ratio[i - epoch_interval[0]]
-        if check_adv_activations:
-            lm.records[i - 1]['adv_inactivity_ratio'] = adv_inactivity_ratio[i - epoch_interval[0]]
-
-    lm.write_all()
-
-
-def generate_activities(model, architecture, from_path, to_path, epoch_range, training_methods, attachments, ds_loader, device=None):
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
-    for training_method in training_methods:
-        for attachment in attachments:
-            for i in epoch_range:
-                print(f'{from_path}/{training_method}_{architecture}{attachment}/{i}')
-                load_model(model, f'{from_path}/{training_method}_{architecture}{attachment}/{i}')
-                std_activity = get_activity(model, model.get_relevant_layers(), ds_loader)
-                save_data(std_activity, f'{to_path}/{training_method}_{architecture}{attachment}/{i}')
-
-
 def l1_norm(x):
     return x.abs()
 
@@ -341,57 +350,6 @@ class WeightRegularization:
                 s += sum(self.norm(p).sum() for p in self.model.get_submodule(layer_id).parameters()) * lam
             return s
         return sum(self.norm(p).sum() for p in self.model.parameters()) * self.lam
-
-
-class ActivityRegularization:
-    def __init__(self, extractor=None, norm=lambda x: x, lam=0.0, lambda_map=None, mask_map=None):
-        self.extractor = extractor
-        self.lam = lam
-        self.lambda_map = lambda_map
-        self.norm = norm
-        self.mask_map = mask_map
-
-    def __call__(self):
-        activations = self.extractor.activations
-        if self.lambda_map is not None:
-            s = 0.0
-            for layer_id, lam in self.lambda_map.items():
-                if self.mask_map is not None:
-                    s += self.norm(activations[layer_id] * self.mask_map[layer_id]).sum() * lam
-                else:
-                    s += self.norm(activations[layer_id]).sum() * lam
-            return s
-        if self.mask_map is not None:
-            s = 0.0
-            for layer_id, mask in self.mask_map.items():
-                s += self.norm(activations[layer_id] * self.mask_map[layer_id]).sum() * self.lam
-            return s
-        return sum(self.norm(a).sum() for a in activations.values()) * self.lam
-
-
-# WIP!
-class GradientRegularization:
-    def __init__(self, model, loss_fn, lam=1.0):
-        self.latest_loss = None
-        self.latest_input = None
-        def loss_setter(_, __, l):
-            self.latest_loss = l
-        def input_setter(_, input):
-            self.latest_input = input[0]
-            if self.latest_input.is_leaf:
-                self.latest_input.requires_grad = True
-        self.loss_hook = loss_fn.register_forward_hook(loss_setter)
-        self.input_hook = model.register_forward_pre_hook(input_setter)
-        self.lam = lam
-
-    def __call__(self):
-        return self.lam * torch.autograd.grad(self.latest_loss, self.latest_input,
-                                              grad_outputs=None, only_inputs=True,
-                                              create_graph=True, retain_graph=True)[0].abs().sum()
-
-    def __del__(self):
-        self.loss_hook.remove()
-        self.input_hook.remove()
 
 
 class RollingStatistics:
